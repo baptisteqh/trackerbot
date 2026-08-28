@@ -117,6 +117,13 @@ def _construire_parseur() -> argparse.ArgumentParser:
     )
     p_doctor.set_defaults(executer=_cmd_doctor)
 
+    p_serve = sous.add_parser(
+        "serve", help="lance l'API HTTP locale consommee par le dashboard"
+    )
+    p_serve.add_argument("--host", default="127.0.0.1", help="defaut 127.0.0.1, jamais 0.0.0.0")
+    p_serve.add_argument("--port", type=int, default=8000)
+    p_serve.set_defaults(executer=_cmd_serve)
+
     return parseur
 
 
@@ -231,6 +238,24 @@ def _cmd_veille(args: argparse.Namespace, config: Config) -> int:
         print("\nSources :")
         for source in veille.sources:
             print(f"  - {source}")
+    return 0
+
+
+def _cmd_serve(args: argparse.Namespace, config: Config) -> int:
+    """Lance uvicorn en local. Impose 127.0.0.1 : refuser 0.0.0.0 par defense en profondeur."""
+    if args.host not in {"127.0.0.1", "localhost"}:
+        print(
+            f"host {args.host!r} refuse : l'API expose des donnees privees, "
+            "elle ne doit pas ecouter au-dela de la machine.",
+            file=sys.stderr,
+        )
+        return 2
+
+    import uvicorn  # import tardif : uvicorn n'est pas requis pour les autres commandes
+
+    from .api import app
+
+    uvicorn.run(app, host=args.host, port=args.port, log_level="info")
     return 0
 
 

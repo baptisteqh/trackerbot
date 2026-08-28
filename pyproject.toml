@@ -10,11 +10,17 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+api = [
+    "fastapi>=0.115",
+    "uvicorn>=0.30",
+]
 dev = [
     "pytest>=8.0",
     "ruff>=0.6",
     "mypy>=1.11",
     "types-PyYAML",
+    "fastapi>=0.115",
+    "uvicorn>=0.30",
 ]
 
 [project.scripts]
