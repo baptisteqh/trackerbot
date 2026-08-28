@@ -11,6 +11,9 @@ recupere une veille de marche quotidienne via l'API Perplexity.
 Le bot ne passe aucun ordre, ne modifie rien chez le courtier et n'ouvre
 aucun port : tout le trafic est sortant.
 
+Disclaimer : Personal project, built for my own use. Nothing in this repository constitutes investment advice or a recommendation to buy or sell any security. Past performance is not indicative of future results.
+Use at your own risk.
+
 ## Contraintes de securite
 
 - Depot publiable : aucun secret n'est ni ne doit etre commis. Toutes les
