@@ -1,14 +1,17 @@
-# DESIGN.md — Tableau de bord Trackerbot
+# DESIGN.md — Tableau de bord Trackerbot (v2)
 
 > Brief opinionne pour l'agent qui construit le dashboard.
 > Cible : Next.js 16 + React 19 + Tailwind v4 + shadcn (style `base-rhea`), rendu par `/rapport` (FastAPI).
-> Langue : francais pour les libelles metier, anglais pour le code.
+> **UI copy en anglais.** Le brief lui-meme reste en francais (documentation interne).
+> v2 : enrichi avec des references Mobbin et Perplexity (voir §12). Aligne avec l'API `deltas` et le refresh scoped.
 
 ---
 
 ## 1. North star
 
 Un journal de bord d'investisseur, pas un terminal. Une page principale qui se lit comme une double-page de magazine financier : titres editoriaux en Fraunces, corps en Inter, fond creme, accents terracotta, chiffres cles en mono. Le PnL saute aux yeux avant les indicateurs techniques ; les signaux ressemblent a des notes de marge, jamais a des sirenes. On doit pouvoir imprimer la page et l'agrafer au cahier.
+
+Reference visuelle la plus proche parmi les ecrans reels examines cette session : **Origin (`/screens/3a516cce-...`)** — grille aeree, courbe portfolio vs benchmark, top movers en colonnes, holdings en pied. On s'en inspire pour la densite ; on divergeait sur la palette (Origin est vert/blanc, nous restons creme/terracotta).
 
 ---
 
@@ -22,7 +25,7 @@ Ordre de priorite (V1 = une seule page ; les sous-pages ne se justifient que qua
 4. **Veille** (`/veille`) — V2 : archive des veilles Perplexity ; en V1 c'est une carte au bas de l'overview.
 5. **Reglages** (`/reglages`) — V2 : source de portefeuille, seuils, benchmark.
 
-Aucune navigation profonde en V1. Une barre superieure minimaliste (logo texte "trackerbot", date de generation, bouton refresh, toggle dark) suffit.
+Aucune navigation profonde en V1. Une barre superieure minimaliste (logo texte "trackerbot", date de generation, refresh scoped, toggle dark) suffit. Pattern navigation editoriale confirme par Perplexity : `Breadcrumb -> Typography-led headline -> Chart as lead visual -> Tabs for related coverage`.
 
 ---
 
@@ -32,43 +35,71 @@ Grille : `max-w-[1240px] mx-auto px-6 py-8`, 12 colonnes, gap 24.
 
 ### Header (h ~ 88px)
 
-- Colonnes 1-6 : titre Fraunces "Portefeuille" + sous-titre "genere le 29 aout 2026" (`genere_le`).
-- Colonnes 7-12 (align right) : bouton `Refresh`, `Badge` benchmark ("vs SPY"), toggle dark, menu discret (source du portefeuille : eToro / YAML).
+- Colonnes 1-6 : titre Fraunces **"Portfolio"** + sous-titre **"Generated Aug 29, 2026 · 14:32"** (`genere_le`).
+- Colonnes 7-12 (align right, ordre de gauche a droite) :
+  1. `Badge` **"vs SPY"** (benchmark actif, `metriques.benchmark`).
+  2. Bouton primaire **`Refresh`** — **rafraichit uniquement les cotations** (rapide, ~2s).
+  3. Bouton `⋯` (icon-only, `variant="ghost"`) qui ouvre un `DropdownMenu` avec :
+     - **"Regenerate market watch"** (relance Perplexity, ~15s, `Sonner` progress toast).
+     - **"Refresh fundamentals"** (relance Yahoo, ~10s).
+     - Separator, puis **"View report source"** (lien vers `/rapport` JSON brut).
+  4. Toggle dark (icon-only, deja cable sur touche `d`).
+- Raccourcis clavier : `r` = Refresh (cotations), `d` = dark toggle.
 
-### Bandeau de tete — Metriques cles (au-dessus du pli, h ~ 180px)
+Reference : ecrans Mobbin **Copilot Money** (`/screens/df0a19e8-...`) et **Origin** (`/screens/3a516cce-...`) — le petit menu roue-crantee dans le coin est le pattern standard pour les actions rares (source display, benchmark, accounts included). On adopte la meme separation "action principale + `⋯` pour les actions couteuses".
+
+### Bandeau de tete — Metric tiles (au-dessus du pli, h ~ 200px)
 
 Grille de 4 `Card` en colonnes 1-12 (chacune sur 3 colonnes) :
 
-| Cellule | Contenu | Champ source |
-|--------|---------|--------------|
-| 1 | Valeur courante + delta jour en badge terracotta | `valeur_courante`, calcul jour |
-| 2 | PnL absolu + PnL % (chiffres XL en mono, couleur signee) | `gain_absolu`, `gain_pct` |
-| 3 | Sharpe + vol annuelle en sous-ligne | `metriques.sharpe`, `metriques.volatilite_annuelle_pct` |
-| 4 | Max drawdown + beta en sous-ligne | `metriques.max_drawdown_pct`, `metriques.beta` |
+| Cellule | Label (uppercase) | Valeur principale | Sous-ligne (deltas) | Champ source |
+|--------|-------------------|-------------------|---------------------|--------------|
+| 1 | **CURRENT VALUE** | `valeur_courante` (Fraunces 40px) | `+$1,234 · +0.42% (1d)` colore | `valeur_courante`, `deltas.pnl_1d_abs`, `deltas.pnl_1d_pct` |
+| 2 | **TOTAL PNL** | `gain_absolu` (mono 32px, signe) | `gain_pct` + segmented `1D / 7D / 30D / ALL` (Tabs) | `gain_absolu`, `gain_pct`, `deltas.pnl_{1d,7d,30d}_{abs,pct}` |
+| 3 | **SHARPE** | `metriques.sharpe` (mono 32px) | `Vol ann. XX.X% · Return ann. XX.X%` | `metriques.sharpe`, `metriques.volatilite_annuelle_pct`, `metriques.rendement_annuel_pct` |
+| 4 | **MAX DRAWDOWN** | `metriques.max_drawdown_pct` (mono 32px, signe) | `Beta vs SPY: X.XX` | `metriques.max_drawdown_pct`, `metriques.beta`, `metriques.benchmark` |
 
-Chaque `Card` : label Inter uppercase tracking-wide, valeur Fraunces 32-40px OU chiffre mono 28px, micro-legende en `text-muted-foreground text-xs`. Pas de fond colore, juste une fine bordure terracotta 10% sur le fond creme.
+- Chaque `Card` : bordure `border-border/70`, pas de fond colore. Label Inter uppercase tracking-wide, valeur Fraunces OU mono selon le tableau, micro-legende en `text-muted-foreground text-xs`.
+- **Deltas** : si la valeur est `null` (historique < N jours), afficher `—` en `text-muted-foreground` avec tooltip **"Not enough history yet"**. Ne jamais afficher `0` a la place.
+- **Segmented control** sur la tuile PnL : bascule entre `1D / 7D / 30D / ALL`. `ALL` = `gain_absolu` / `gain_pct` (life-to-date), les autres = valeurs du bloc `deltas`.
+- Couleur des deltas : `text-[--pnl-positive]` (vert sobre) si > 0, `text-[--pnl-negative]` (rouge terracotta) si < 0, sinon `text-muted-foreground`.
 
-### Zone principale (h ~ 420px, sous le pli 1)
+Reference pattern : **Whop Analytics** (`/screens/add1901d-...`), **Quicken Investments** (`/screens/f61813eb-...` — "Day $ / Day % / 1 Month $ / 1 Month %" en colonnes), et **Monarch Holdings** (`/screens/c9f450db-...` — "PAST 90 DAYS / TODAY" en sous-ligne). Perplexity a insiste sur `progressive disclosure` et `benchmark + observation window` pour beta — d'ou la sous-ligne explicite "vs SPY".
 
-- Colonnes 1-8 : **Courbe d'equity** dans une `Card` : aire ombree terracotta, ligne pleine terracotta 700, overlay drawdown en pointille sombre. Tabs `1M / 3M / 6M / YTD / MAX` en haut a droite (donnees derivees de `serie_equity_portefeuille`, cote client si non expose ; sinon fenetre = `min(len(clotures))`).
-- Colonnes 9-12 : **Concentration** dans une `Card` : donut leger (top 5 positions + "autres"), legende sous forme de liste avec `poids_pct`. En pied : HHI et plus grosse position (`metriques.hhi`, `metriques.plus_grosse_position_pct`).
+### Zone principale (h ~ 420px)
+
+- Colonnes 1-8 : **Equity curve** dans une `Card` :
+  - `AreaChart` recharts, gradient terracotta -> transparent, ligne pleine 1.5px.
+  - Tabs `1M / 3M / 6M / YTD / MAX` en haut a droite. Source = `equity_series` (expose par l'API) ; fallback = reconstruction cote client depuis `lignes[*].cotation.clotures` sur fenetre commune.
+  - Overlay **drawdown** en pointille sombre (axe Y secondaire cote droit), toggle via `Toggle` en haut a droite.
+  - Overlay **benchmark** (SPY) en `stroke-muted-foreground/60` fin, toggle separe. Pattern **Monarch** (`/screens/c9f450db-...`) : le benchmark reste visuellement subordonne (couleur froide, ligne plus fine).
+  - Point terminal souligne d'un dot terracotta + label `Updated just now` en `text-xs italic text-muted-foreground` — cue de fraicheur recommande par Perplexity (voir §7 anim).
+- Colonnes 9-12 : **Concentration** dans une `Card` :
+  - Donut leger (`innerRadius=60%`), 5 slices terracotta degrade + gris pour "Others".
+  - Legende sous forme de liste : ticker + `poids_pct`, tri desc.
+  - En pied : `HHI: X.XX` et `Top position: TICKER XX%` (`metriques.hhi`, `metriques.plus_grosse_position_pct`).
 
 ### Positions (pleine largeur, h auto)
 
-- `Card` avec `Table` shadcn, colonnes : Ticker | Sens (L/S badge) | Qte | Prix entree | Prix | Var 24h (sparkline mini) | Poids % | PnL abs | PnL % | RSI 14 | vs SMA 20/50 (glyphes ↑/↓) | Vol 20j | Score valo | Signaux (dot).
-- Tri par defaut : `poids_pct` desc.
-- Ligne en `hover:bg-secondary/40`, click sur ticker ouvre un `Sheet` de detail (V1.5).
-- Tickers sans cotation en italique + tag "cotation manquante" (source : `tickers_manquants`).
+- `Card` avec `Table` shadcn. Colonnes (dans l'ordre) :
+  `Ticker | Side (L/S) | Qty | Entry | Price | 24h Chg (sparkline mini) | Weight % | PnL abs | PnL % | RSI 14 | vs SMA 20/50 | Vol 20d | Valuation | Signals`
+- Sparkline mini : `LineChart` 80x24, stroke `--primary`, aucun axe, source = `cotation.clotures[-30:]`.
+- Tri par defaut : `poids_pct` desc. Entetes cliquables, chevron discret.
+- Hover ligne : `bg-secondary/40`. Click sur ticker ouvre un `Sheet` de detail (V1.5).
+- Tickers sans cotation en italique + tag **"missing quote"** (source : `tickers_manquants`).
+- Empty cells : `—` en `text-muted-foreground`, jamais `null` ou `0`.
+
+Reference : **Fey Portfolio** (`/screens/f4b1fb8e-...`) et **Uniswap Tokens** (`/screens/e39f0d0f-...`) — sparklines en fin de ligne, prix aligne a droite, badges de variation en pilule. Densite acceptable pour ~30 lignes sans scroll.
 
 ### Trois cartes en pied (colonnes 1-4 / 5-8 / 9-12)
 
-- **Signaux du jour** : liste groupee par niveau (`alerte` puis `attention` puis `info`), badge couleur par niveau, message + regle en petit. Empty state : "Aucun signal declenche." (`signaux`).
-- **Valorisation** : top 5 des tickers avec `score_valorisation`, barre horizontale 0-7 en terracotta, PER / PB / marge / ROE / D/E en mono a droite (`lignes[*].score_valorisation`, `fondamentaux`).
-- **Veille du jour** : titre "Veille Perplexity", texte serre en Fraunces italique, sources listees en `text-xs` avec liens (`veille.texte`, `veille.sources`).
+- **Today's signals** : liste groupee par niveau (`alerte` puis `attention` puis `info`), badge couleur par niveau, message + regle en petit. Empty state : *"No signals fired today."* (`signaux`). Compteur en header : `Today's signals · 3`.
+- **Valuation** : top 5 des tickers avec `score_valorisation`, barre horizontale 0-7 en terracotta, PER / PB / margin / ROE / D/E en mono a droite (`lignes[*].score_valorisation`, `fondamentaux`).
+- **Market watch** (ex-"Veille") : titre `Market watch · Perplexity`, texte serre en Fraunces italique 15px, sources listees en `text-xs` avec liens externes (`veille.texte`, `veille.sources`). Icon `↗` a cote de chaque source. Perplexity conseille : *featured story avec accent terracotta + smaller items groupes "Your positions / Watchlist / Market backdrop"* — en V1 on a un seul bloc, on decoupera si Perplexity retourne du contenu structure.
 
 ### Footer (h ~ 40px)
 
-Menu discret : "Rapport genere le ... · 12 positions · 3 signaux · Source : eToro". Rien de plus.
+Menu discret : *"Report generated Aug 29, 2026 · 12 positions · 3 signals · Source: eToro"*. Rien de plus.
 
 ---
 
@@ -79,50 +110,55 @@ A installer via `npx shadcn@latest add` (dans `dashboard/`) :
 ```
 npx shadcn@latest add card badge table tabs sheet separator skeleton \
   tooltip dropdown-menu scroll-area sonner chart accordion input select \
-  toggle-group
+  toggle-group toggle
 ```
 
-Role par composant :
+Role par composant (evidence entre parentheses quand applicable) :
 
-- **Card** — chaque tuile metrique, chaque section (equity, concentration, positions, signaux, valo, veille).
-- **Badge** — sens L/S, niveaux de signal (`info` / `attention` / `alerte`), tag benchmark, tag "cotation manquante".
-- **Table** — tableau des positions ; tri cote client via `<TableHead>` cliquable.
-- **Tabs** — fenetre de la courbe d'equity (1M/3M/6M/YTD/MAX), plus filtres futurs.
-- **Sheet** — panneau lateral de detail ticker (V1.5 : cotation, indicateurs, fondamentaux, signaux du ticker).
-- **Separator** — hairlines editoriales entre blocs de la page.
-- **Skeleton** — placeholders pendant le fetch de `/rapport` (une skeleton par section, pas une seule).
-- **Tooltip** — definitions des metriques (Sharpe, HHI, MaxDD) au survol du label.
-- **Dropdown-menu** — menu source dans le header (eToro / YAML / import).
+- **Card** — chaque tuile metrique, chaque section.
+- **Badge** — sens L/S, niveaux de signal (`info` / `attention` / `alerte`), tag benchmark, tag "missing quote".
+- **Table** — tableau des positions ; tri cote client via `<TableHead>` cliquable (pattern Fey/Uniswap).
+- **Tabs** — fenetre de la courbe d'equity (1M/3M/6M/YTD/MAX) + segmented `1D/7D/30D/ALL` sur la tuile PnL (pattern Origin `/screens/3a516cce-...`, Monarch `/screens/c9f450db-...`).
+- **Sheet** — panneau lateral de detail ticker (V1.5). Pattern : **Monarch VTI detail** (`/screens/07bf1695-...`) qui glisse depuis la droite avec chart + summary + accounts.
+- **Separator** — hairlines editoriales entre blocs.
+- **Skeleton** — placeholders par section pendant le fetch (jamais un spinner plein ecran).
+- **Tooltip** — definitions Sharpe, HHI, MaxDD, Beta au survol du label (recommandation Perplexity : *tooltip + text alternative*).
+- **Dropdown-menu** — menu `⋯` du header (regenerate watch, refresh fundamentals, view raw JSON).
 - **Scroll-area** — panneau des signaux si la liste devient longue.
-- **Sonner** — toasts pour "rapport rafraichi", erreurs de fetch.
-- **Chart** (recharts wrapper) — courbe d'equity + drawdown + donut concentration + sparklines lignes de table.
+- **Sonner** — toasts pour "Report refreshed", erreurs de fetch, progress des refresh longs (regenerate watch / fundamentals).
+- **Chart** (recharts wrapper) — equity curve + drawdown overlay + benchmark overlay + donut + sparklines.
 - **Accordion** — details des criteres de valorisation par ticker (7 lignes qui se deplient).
-- **Input / Select** — filtres du tableau positions (V1.5 : filtre par secteur, min poids, niveau de signal).
-- **Toggle-group** — bascule "valeur / PnL / PnL %" sur les grandes tuiles.
+- **Input / Select** — filtres du tableau positions (V1.5).
+- **Toggle-group** — bascule "value / PnL / PnL %" sur les grandes tuiles (V1.5).
+- **Toggle** — bascules overlays (drawdown on/off, benchmark on/off) sur l'equity curve.
+
+Pas de `Breadcrumb` en V1 (une seule page) ; a considerer si on ajoute `/positions` et `/signaux` en V2 (recommandation Perplexity pour la feel editoriale).
 
 ---
 
 ## 5. Data mapping
 
-Endpoint : `GET http://127.0.0.1:8000/rapport` -> `Rapport`. Un seul fetch cote page (server component) avec revalidation manuelle par le bouton Refresh.
+Endpoint : `GET http://127.0.0.1:8000/rapport` -> `Rapport`. Un seul fetch cote page (server component) avec revalidation manuelle par le bouton Refresh. Payload enrichi depuis v1 avec **`deltas`** (voir §2 des instructions).
 
-| Section UI | Champs (chemin dans `Rapport`) |
-|-----------|-------------------------------|
-| Titre + date | `genere_le`, `nombre_positions` (derive) |
-| Tuile Valeur | `valeur_courante`, delta = valeur - somme derniere cloture (cote client) |
-| Tuile PnL | `gain_absolu`, `gain_pct`, `montant_investi` |
-| Tuile Sharpe/Vol | `metriques.sharpe`, `metriques.volatilite_annuelle_pct`, `metriques.rendement_annuel_pct` |
-| Tuile MaxDD/Beta | `metriques.max_drawdown_pct`, `metriques.beta`, `metriques.benchmark` |
-| Courbe d'equity | serie `lignes[*].cotation.clotures` reconstituee (idealement expose par l'API comme `equity_series`) ; fallback = derniere valeur seule + placeholder |
-| Overlay drawdown | derive de la meme serie cote client |
-| Donut concentration | `lignes[*].ticker`, `lignes[*].poids_pct`, `metriques.hhi`, `metriques.plus_grosse_position_pct` |
-| Table positions | `lignes[*]` : `.ticker`, `.position.est_long`, `.position.quantite`, `.position.prix_entree`, `.cotation.prix`, `.cotation.variation_jour_pct`, `.cotation.clotures` (sparkline), `.poids_pct`, `.gain_absolu`, `.gain_pct`, `.rsi_14`, `.sma_20`, `.sma_50`, `.volatilite_20j_pct`, `.score_valorisation.score` |
-| Cotations manquantes | `tickers_manquants` |
-| Panneau signaux | `signaux[*]` : `.ticker`, `.niveau`, `.regle`, `.message` ; groupes par `niveau` (`alerte` > `attention` > `info`) |
-| Carte valorisation | `lignes[*].score_valorisation` (score, criteres_remplis, criteres_manquants, inconnus) + `lignes[*].fondamentaux` (`per`, `price_to_book`, `marge_nette_pct`, `debt_to_equity`, `roe_pct`, `dividend_yield_pct`, `secteur`) |
-| Carte veille | `veille.texte`, `veille.sources` |
+| Section UI | Label affiche | Champs (chemin dans `Rapport`) |
+|-----------|--------------|-------------------------------|
+| Header title | Portfolio | `nombre_positions` (derive), `genere_le` |
+| Tile 1 — Current value | CURRENT VALUE | `valeur_courante` + `deltas.pnl_1d_abs`, `deltas.pnl_1d_pct` |
+| Tile 2 — Total PnL | TOTAL PNL | `gain_absolu`, `gain_pct`, `montant_investi` ; segmented -> `deltas.pnl_{1d,7d,30d}_{abs,pct}` |
+| Tile 3 — Sharpe | SHARPE | `metriques.sharpe`, `metriques.volatilite_annuelle_pct`, `metriques.rendement_annuel_pct` |
+| Tile 4 — Max drawdown | MAX DRAWDOWN | `metriques.max_drawdown_pct`, `metriques.beta`, `metriques.benchmark` |
+| Equity curve | Equity | `equity_series` (API) ; fallback = reconstruction depuis `lignes[*].cotation.clotures` |
+| Drawdown overlay | Drawdown | derive de `equity_series` cote client |
+| Benchmark overlay | vs SPY | idealement `equity_series.benchmark` ; sinon absent en V1 |
+| Donut concentration | Concentration | `lignes[*].ticker`, `lignes[*].poids_pct`, `metriques.hhi`, `metriques.plus_grosse_position_pct` |
+| Table positions | Positions | `lignes[*]` : `.ticker`, `.position.est_long`, `.position.quantite`, `.position.prix_entree`, `.cotation.prix`, `.cotation.variation_jour_pct`, `.cotation.clotures` (sparkline), `.poids_pct`, `.gain_absolu`, `.gain_pct`, `.rsi_14`, `.sma_20`, `.sma_50`, `.volatilite_20j_pct`, `.score_valorisation.score` |
+| Missing quotes | Missing quotes | `tickers_manquants` |
+| Signals card | Today's signals | `signaux[*]` : `.ticker`, `.niveau`, `.regle`, `.message` ; groupes par `niveau` (`alerte` > `attention` > `info`) |
+| Valuation card | Valuation | `lignes[*].score_valorisation` (`.score`, `.criteres_remplis`, `.criteres_manquants`, `.inconnus`) + `lignes[*].fondamentaux` (`per`, `price_to_book`, `marge_nette_pct`, `debt_to_equity`, `roe_pct`, `dividend_yield_pct`, `secteur`) |
+| Market watch card | Market watch | `veille.texte`, `veille.sources` |
+| Footer | — | `genere_le`, `nombre_positions`, `signaux.length`, `source` (a exposer par l'API) |
 
-Types TS : generer un `types.ts` a la main qui reflete `Rapport`, `LignePortefeuille`, `MetriquesPortefeuille`, `Fondamentaux`, `ScoreValorisation`, `Signal`, `Cotation`. Ne pas dependre d'un generateur OpenAPI en V1.
+Types TS : generer un `types.ts` a la main qui reflete `Rapport`, `LignePortefeuille`, `MetriquesPortefeuille`, `Fondamentaux`, `ScoreValorisation`, `Signal`, `Cotation`, **`Deltas`**. Ne pas dependre d'un generateur OpenAPI en V1. Les noms de champs restent en francais dans le type (miroir de la dataclass Python), les labels d'UI sont traduits au moment du rendu.
 
 ---
 
@@ -168,6 +204,8 @@ A coller dans `app/globals.css` (remplace les blocs `:root` et `.dark` existants
     --chart-3: oklch(0.5 0.05 65);
     --chart-4: oklch(0.65 0.09 100);               /* ambre */
     --chart-5: oklch(0.45 0.08 150);               /* vert sobre */
+    --pnl-positive: oklch(0.5 0.08 150);           /* vert sobre PnL + */
+    --pnl-negative: oklch(0.55 0.15 30);           /* rouge terracotta PnL - */
     --radius: 0.5rem;
 }
 
@@ -195,6 +233,8 @@ A coller dans `app/globals.css` (remplace les blocs `:root` et `.dark` existants
     --chart-3: oklch(0.65 0.04 70);
     --chart-4: oklch(0.75 0.1 100);
     --chart-5: oklch(0.6 0.09 150);
+    --pnl-positive: oklch(0.65 0.09 150);
+    --pnl-negative: oklch(0.68 0.15 30);
 }
 ```
 
@@ -211,16 +251,25 @@ Espacement : gap standard 16 / 24 / 32. Radius : `--radius: 0.5rem` (moins arron
 ## 7. Interaction patterns
 
 - **Tri** : entetes de colonne cliquables (icone chevron discret) ; multi-tri non necessaire en V1.
-- **Filtres** : au-dessus du tableau, `Input` recherche ticker + `Select` niveau signal + `Select` secteur (V1.5).
-- **Hover** : lignes de tableau -> `bg-secondary/40` ; cellules PnL -> tooltip avec detail (prix entree, prix courant, quantite).
+- **Filtres** : au-dessus du tableau, `Input` "Search ticker" + `Select` "Signal level" + `Select` "Sector" (V1.5).
+- **Hover** : lignes de tableau -> `bg-secondary/40` ; cellules PnL -> tooltip *"Entry $X · Current $Y · Qty Z"*.
 - **Badges signaux** :
   - `info` -> `bg-muted text-muted-foreground border`
-  - `attention` -> `bg-amber-100 text-amber-900 border-amber-300` (ou tokens equivalents `--chart-4`)
+  - `attention` -> `bg-[--chart-4]/15 text-[--chart-4] border-[--chart-4]/40` (ambre)
   - `alerte` -> `bg-primary/15 text-primary border-primary/40`
-- **Empty states** editoriaux, phrase courte en italique Fraunces : "Rien a signaler aujourd'hui.", "Aucun fondamental disponible pour ces valeurs.", "La veille n'a pas encore ete generee."
+- **Empty states** editoriaux, phrase courte en italique Fraunces :
+  - *"Nothing to report today."*
+  - *"No fundamentals available for these tickers."*
+  - *"Market watch hasn't been generated yet."*
+  - *"Not enough history yet."* (deltas nuls)
 - **Loading** : `Skeleton` par section (jamais un spinner plein ecran) ; les tuiles metriques gardent leur label, seul le chiffre devient une barre grise.
-- **Erreurs** : toast Sonner + carte inline "Impossible de charger le rapport. Verifier que l'API tourne sur 127.0.0.1:8000." avec bouton `Reessayer`.
-- **Refresh** : bouton dans le header + raccourci `r` (ecouteur global comme le `d` deja en place).
+- **Erreurs** : toast Sonner + carte inline *"Couldn't reach the report. Check that the API is running on 127.0.0.1:8000."* avec bouton `Retry`.
+- **Refresh scoped** :
+  - Bouton `Refresh` du header + raccourci `r` -> `fetch('/rapport?scope=quotes')` (rapide). Toast Sonner *"Quotes refreshed."* + comparaison avec l'etat precedent pour detecter les nouveaux signaux.
+  - `⋯` -> *"Regenerate market watch"* -> `fetch('/rapport?scope=veille')`. Toast progress *"Regenerating market watch..."* puis *"Market watch updated."*
+  - `⋯` -> *"Refresh fundamentals"* -> `fetch('/rapport?scope=fundamentals')`. Toast progress *"Refreshing fundamentals..."*
+  - Note d'implementation : les scopes seront supportes cote API (endpoint deja unifie, ajouter un query param) — c'est une open question §11.
+- **Animation refresh** (source : Perplexity §12.b) : sur nouvelle equity_series, interpoler la ligne 300-500ms, garder axes / labels / annotations fixes, dot terracotta sur le point terminal + label *"Updated just now"* qui fade in. **Respecter `prefers-reduced-motion`** : mise a jour instantanee, on garde uniquement le highlight du dernier point et le timestamp.
 
 ---
 
@@ -228,13 +277,14 @@ Espacement : gap standard 16 / 24 / 32. Radius : `--radius: 0.5rem` (moins arron
 
 Librairie : `chart` shadcn (wrapper autour de recharts, deja livre par `npx shadcn add chart`).
 
-- **Equity curve** : `AreaChart`, gradient terracotta -> transparent, ligne pleine 1.5px. Axe X en dates (Fraunces italic tick), axe Y en `NumberFormat` compact ("$12.4k"). Tooltip custom : date + valeur + PnL cumule.
+- **Equity curve** : `AreaChart`, gradient terracotta -> transparent, ligne pleine 1.5px. Axe X en dates (Fraunces italic tick), axe Y en `NumberFormat` compact ("$12.4k"). Tooltip custom : date + valeur + PnL cumule + delta jour.
 - **Drawdown overlay** : `Line` en pointille sur meme graphe, axe Y secondaire cote droit (%). Toggle on/off via `Toggle`.
-- **Concentration** : `PieChart` type donut, `innerRadius=60%`, 5 slices terracotta degrade + gris pour "autres".
+- **Benchmark overlay** : `Line` fine en `--chart-3` (gris), axe Y partage (rebase 0). Toggle on/off. Le benchmark reste **visuellement subordonne** — la portfolio line reste dominante (recommandation Perplexity + pattern Monarch `/screens/c9f450db-...`).
+- **Concentration** : `PieChart` type donut, `innerRadius=60%`, 5 slices terracotta degrade + gris pour "Others". Label central : `HHI XX.XX`.
 - **Sparklines** dans la table positions : `LineChart` mini (largeur ~80px, hauteur 24px), stroke `primary`, aucun axe, source = `cotation.clotures[-30:]`.
-- **Barres score valorisation** : element simple 7 segments, pas besoin de recharts.
+- **Barres score valorisation** : element simple 7 segments (`div` flex + `bg-primary`), pas besoin de recharts.
 
-Regle generale : jamais plus de 3 couleurs par graphe, jamais de grille de fond noire, ticks en `text-muted-foreground`.
+Regle generale : jamais plus de 3 couleurs par graphe, jamais de grille de fond noire, ticks en `text-muted-foreground`. Motion honoree via `prefers-reduced-motion`.
 
 ---
 
@@ -242,10 +292,13 @@ Regle generale : jamais plus de 3 couleurs par graphe, jamais de grille de fond 
 
 Les signaux Trackerbot sont deja envoyes sur Telegram : le dashboard n'a pas a re-notifier. Il **affiche** :
 
-1. **Panneau lateral overview** — carte "Signaux du jour" (voir §3). C'est le canal principal.
-2. **Point rouge dans la ligne de position** — un `dot` terracotta apparait dans la colonne "Signaux" du tableau des que le ticker a au moins un signal ; tooltip liste les regles.
-3. **Toast Sonner** discret quand un `Refresh` fait passer le nombre d'alertes de N a N+1 (compare a l'etat precedent, cote client). Pas de son.
-4. **Pas de banniere globale** en V1. Une banniere n'apparait qu'a partir de 3 `alerte` simultanees : bandeau creme fonce en haut de page "3 alertes actives — voir les signaux", cliquable.
+1. **Panneau overview** — carte "Today's signals" (voir §3). Canal principal.
+2. **Signal dot dans la ligne de position** — un dot terracotta apparait dans la colonne "Signals" du tableau des que le ticker a au moins un signal ; tooltip liste les regles.
+3. **Toast Sonner** discret quand un `Refresh` fait passer le nombre d'alertes de N a N+1 (compare a l'etat precedent, cote client). Pas de son. Toast text : *"1 new alert · TICKER"*.
+4. **Pas de banniere globale** en V1. Une banniere n'apparait qu'a partir de 3 `alerte` simultanees : bandeau creme fonce en haut de page *"3 active alerts — view signals"*, cliquable.
+5. **Freshness cue** sur l'equity curve : dot terracotta + *"Updated just now"* qui fade in apres refresh (voir §7).
+
+Pattern de reference pour la severite : **Sentry Feed** (`/screens/084d445d-...`) — colonne "Trend / 24h / Events / Priority" avec priorite en icone discrete. On adopte la triple severite sans copier le look sombre.
 
 Pas de centre de notifications separe en V1 (la page overview est le centre).
 
@@ -257,8 +310,8 @@ Pas de centre de notifications separe en V1 (la page overview est le centre).
 - Pas de streaming temps reel (WebSocket) : refresh manuel + revalidation Next.
 - Pas de passage d'ordre, jamais.
 - Pas de mobile-first : responsive raisonnable a partir de `md`, mais la cible est desktop 1440px.
-- Pas de i18n : francais fige.
-- Pas d'historique multi-jours en V1 (le rapport est instantane). L'archivage viendra avec une table SQLite cote bot.
+- Pas de i18n runtime : **UI en anglais**, brief en francais.
+- **Historique inter-jours OK** (nouveau vs v1) : `storage.py` + `deltas` dans le payload. Pas d'ecran d'archive complet en V1 — les deltas sur les tuiles suffisent.
 - Pas de theming utilisateur : creme + terracotta est le style unique, dark mode inclus mais reste chaud.
 - Pas d'export PDF automatique (mais la page doit rester imprimable via CSS `@media print`).
 
@@ -266,23 +319,73 @@ Pas de centre de notifications separe en V1 (la page overview est le centre).
 
 ## 11. Open questions (a valider avec l'utilisateur)
 
-1. **Serie d'equity** — l'API `/rapport` expose-t-elle une serie temporelle alignee, ou faut-il reconstruire cote client depuis `lignes[*].cotation.clotures` (fenetre commune) ? Impact : ajouter un champ `equity_series` au Rapport simplifie la vie.
-2. **Historique** — voulons-nous garder les rapports precedents (SQLite ou fichiers datés) pour comparer d'un jour a l'autre (delta jour dans la tuile Valeur) ? Sans historique, "variation jour" se limite a `cotation.variation_jour_pct` par ligne.
-3. **Sous-page Positions** — a partir de combien de lignes migre-t-on hors de l'overview ? Proposition : 20 lignes, mais depend de la taille reelle du portefeuille.
-4. **Traduction des libelles techniques** — RSI, SMA, HHI, Sharpe restent en anglais ; PER / PB / D/E aussi ? Ou francise-t-on tout (marge nette, dette/fonds propres) ? Proposition actuelle : anglais pour les acronymes financiers, francais pour les phrases.
-5. **Refresh** — le bouton doit-il aussi relancer la veille Perplexity et les fondamentaux Yahoo (couteux) ou seulement les cotations ? Proposition : bouton principal = cotations seules, menu "..." = "Regenerer la veille" et "Rafraichir les fondamentaux" separement.
+1. **Endpoint scoped** — l'API `/rapport` doit-elle accepter `?scope=quotes|veille|fundamentals` ou faut-il exposer 3 endpoints separes (`/rapport/quotes`, `/rapport/veille`, `/rapport/fundamentals`) ? La v2 du brief suppose la premiere option (query param) mais l'implementation reste a decider.
+2. **`equity_series` structure** — l'API expose-t-elle `equity_series: {dates: string[], values: number[], benchmark?: number[]}` ? Sans la cle `benchmark`, l'overlay SPY sur l'equity curve est impossible (toggle grise avec tooltip *"Benchmark series not available"*).
+3. **Sous-page Positions** — a partir de combien de lignes migre-t-on hors de l'overview ? Proposition : 20 lignes.
+4. **Structure de `veille`** — si Perplexity renvoie des sections par ticker (recommandation §12.b), faut-il enrichir `Veille` avec `sections: {ticker: string, texte: string, sources: []}[]` ? Sans structure, on garde un seul bloc texte.
+5. **Historique deltas dispo** — combien de jours d'historique SQLite a-t-on typiquement au moment du render ? Impact : si `pnl_30d_pct` est presque toujours `null` les 30 premiers jours, on cache le segment ALL/30D des tuiles jusqu'a X entrees.
+6. **Icones** — quelle bibliotheque ? `lucide-react` est le defaut shadcn. Confirmer.
 
 ---
 
 ## 12. Evidence trail
 
-Transparence sur la recherche :
+### 12.a Mobbin — flows et screens cites
 
-- **Mobbin** (`mcp__claude_ai_Mobbin__search_screens`) et **Perplexity** (`mcp__perplexity__perplexity_ask`) : outils demandes dans le brief mais **refuses par le sandbox de permissions** dans cette session. Impossible de citer des ecrans ou requetes precis.
-- Les recommandations s'appuient sur les conventions publiques et bien documentees des references citees dans le brief :
-  - Bandeau 4 tuiles metriques + courbe equity dominante -> pattern **Delta / Robinhood / eToro**.
-  - Table dense avec sparklines + colonnes signaletiques -> **TradingView watchlist** et **Bloomberg BLP**.
-  - Metric cards editoriales + skeletons par section + toggle theme discret -> **Vercel Analytics / Linear Insights / Stripe Dashboard**.
-  - Carte "veille" avec sources listees en pied -> pattern **FT / Perplexity Finance**.
-  - Panneau signaux triple severite -> **Linear Inbox** et **Sentry** (info / warning / error).
-- Recommandation : la prochaine iteration devrait rejouer ces requetes avec les permissions Mobbin/Perplexity activees pour confirmer/enrichir la §3 (grille overview) et §7 (patterns de badges).
+Requetes cette session via `mcp__claude_ai_Mobbin__search_screens` / `_flows` (platform=web) :
+
+- **"portfolio overview with total value and daily change"** (6 resultats) — influence §3 header + tuiles : Copilot Money https://mobbin.com/screens/df0a19e8-30c4-4d6a-8855-7060478380ac ; Monarch https://mobbin.com/screens/c9f450db-5200-4352-87b4-fa11ae8f2137 ; Origin https://mobbin.com/screens/3a516cce-bf0f-4eb8-90d7-1625e5d49c32 ; Quicken (Day $ / Day % / 1M $ / 1M %) https://mobbin.com/screens/f61813eb-4a2f-44b7-8c19-e34ae0072979
+- **"watchlist table with sparkline and percent change columns"** (5) — influence §3 Positions : Fey https://mobbin.com/screens/f4b1fb8e-1db1-407c-a1b1-41ec1eb312c7 ; Uniswap Tokens https://mobbin.com/screens/e39f0d0f-bed1-49ff-92e0-c53d36d34de6
+- **"portfolio allocation donut with concentration percentages"** (5) — influence §3 Concentration : Quicken savings goals https://mobbin.com/screens/8c443a6b-1bd2-468d-afd6-a01042929932
+- **"equity curve line chart with time range tabs"** (5) — influence §3 Equity + §8 : Origin https://mobbin.com/screens/3a516cce-bf0f-4eb8-90d7-1625e5d49c32 ; Fey TSLA (tabs 1D/1W/1M/3M/YTD/1Y/5Y/All + news summary a droite) https://mobbin.com/screens/4ac6daeb-a2ab-46ea-b8fe-7e328f2c493b
+- **"news feed article list with source citations"** (5) — influence §3 Market watch : Perplexity Discover (featured + trending aside) https://mobbin.com/screens/ec59e633-ba10-46a5-9277-363061007f02 ; Substack Home https://mobbin.com/screens/de1b3c40-9046-4a6a-9bfb-bc7c8476e7e3
+- **"metric tile with delta indicator and trend arrow"** (5) — influence §3 tuiles : Whop Analytics (tuiles + sparklines) https://mobbin.com/screens/add1901d-9b32-4751-83e0-b44083fd2c03
+- **"alerts and signals inbox with severity levels"** (5) — influence §9 : Sentry Feed (Trend / 24h / Events / Priority) https://mobbin.com/screens/084d445d-603f-48e0-8442-dd5cf0ffacb2
+- **"stock detail with fundamentals PE ratio and margin"** (5) — influence §3 Valuation + Sheet V1.5 : Perplexity Finance TSLA financials https://mobbin.com/screens/9403c5aa-9ecf-4e38-828f-7f702ef23448 ; Monarch VTI detail sheet https://mobbin.com/screens/07bf1695-3589-443c-a0eb-4ed8dab05de1 ; Revolut Apple https://mobbin.com/screens/3076e57a-078d-482f-be3a-9c4d079c3153
+- **"dashboard header with refresh button and overflow menu"** (5) — peu concluant : Zoho CRM https://mobbin.com/screens/83a3cd87-1eee-4748-8194-ae159f50f3db. Aucun screen ne montre exactement le split "Refresh + `⋯` scoped" — pattern derive de Copilot Money (roue crantee coin de la card Investments) applique au header global.
+- **Flow "investment app portfolio overview and holdings drilldown"** — Origin "Portfolio" 5 ecrans (overview -> holdings tab -> chart + benchmark), **source principale pour la sequence** : https://mobbin.com/flows/054c2bf6-ebe0-4e21-8e52-97f48ebf01b7 ; Origin "Portfolio overview" https://mobbin.com/flows/5f9f6d4a-19d7-4c03-bb7d-a1a8c73bfbd4 ; Copilot Money "Investments" https://mobbin.com/flows/09dca80d-68bf-4653-b1b4-13d19384c634
+- **Flow "dashboard refresh data with time range selection"** — Railway "Filtering by time" https://mobbin.com/flows/a8043688-ec79-4a69-a0aa-78153021e649 ; Seline "Filtering dashboard by date" https://mobbin.com/flows/766eff87-4f98-488e-948a-c1ad0029a569. Aucun ne montre un refresh scoped — invention alignee sur le split Perplexity/Yahoo (voir §11.1).
+
+### 12.b Perplexity — questions posees et findings
+
+1. **"Best UX patterns for portfolio dashboards showing Sharpe drawdown alongside PnL"** — influence §3 tuiles + §8 :
+   - Sources retenues :
+     - lollypop.design — "Investment Dashboard UX Design Guide (May 2026)" — https://lollypop.design/blog/2026/may/investment-dashboard-ux-design-guide/
+     - lazarev.agency — "Dashboard UX design" — https://www.lazarev.agency/articles/dashboard-ux-design
+     - wildnetedge.com — "Fintech UX design best practices" — https://www.wildnetedge.com/blogs/fintech-ux-design-best-practices-for-financial-dashboards
+   - Recommandations retenues : `Lead with one cumulative-PnL chart and a consistent time-range control` (adopte §3 equity), `Place Sharpe, max drawdown, and beta in a compact Risk card beside the chart` (partiellement adopte — on garde 4 tuiles au lieu d'une carte Risk pour rester editorial), `Visualize max drawdown directly on the PnL timeline` (adopte -> overlay drawdown §8), `Make beta benchmark-specific` (adopte -> "Beta vs SPY" en sous-ligne §3 tile 4), `Progressive disclosure + accessible alternatives via tooltip + text` (adopte §7).
+2. **"In-app market news feed patterns + smooth equity-curve refresh animations"** (fusionnee car rate-limit sur premiere tentative separee) — influence §3 Market watch + §7 animation :
+   - Sources WCAG et animation :
+     - openreplay.com — `prefers-reduced-motion` — https://blog.openreplay.com/prefers-reduced-motion-accessible-animation/
+     - w3.org WCAG21 C39 — https://www.w3.org/WAI/WCAG21/Techniques/css/C39
+     - accessibility.build 2.3.3 — https://accessibility.build/wcag/2-3-3
+   - Recommandations retenues : `Lead with relevance, not recency` (adopte pour V2 marchet watch quand Perplexity renverra du contenu structure — voir §11.4), `Attach news directly to positions` (a valider avec la structure `veille.sections` §11.4), `Editorial hierarchy: one featured story + smaller grouped items` (adopte), `Animate the transition, not the entire chart` + `300-500ms interpolation` + `honor prefers-reduced-motion` (adopte §7 anim).
+3. **"shadcn dashboard editorial patterns 2025"** — influence §2 IA + §4 inventory :
+   - Sources : ui.shadcn.com/examples/dashboard — https://ui.shadcn.com/examples/dashboard ; github shadcn-ui/ui — https://github.com/shadcn-ui/ui
+   - Recommandation retenue : `Breadcrumb -> Typography-led headline -> Chart as lead visual -> Tabs for related coverage`. Adopte partiellement : Breadcrumb reporte en V2 (§4), le reste applique en V1.
+
+### 12.c Ce que v1 avait juste (et qu'on conserve tel quel)
+
+- Grille 12 colonnes `max-w-[1240px]`, gap 24 — conserve.
+- Ordre des sections Overview (header -> tuiles -> equity+donut -> table -> 3 cartes en pied -> footer) — conserve.
+- Palette creme + terracotta oklch — conserve (mais on ajoute `--pnl-positive` / `--pnl-negative` pour clarifier les deltas).
+- Fraunces + Inter + Geist Mono — conserve.
+- Ne pas notifier depuis le dashboard (Telegram est deja le canal) — conserve.
+- Empty states editoriaux en italique Fraunces — conserve, traduits en anglais.
+- Skeleton par section, jamais spinner plein ecran — conserve.
+
+### 12.d Ce que v1 recommandait et qu'on abandonne / modifie
+
+- **Libelles francais** -> tous les UI copy passent en anglais (contrainte utilisateur post-v1).
+- **Historique multi-jours en non-goal** -> supprime, `deltas` fait partie du payload (contrainte utilisateur post-v1).
+- **Refresh = tout** -> refresh scoped avec split `Refresh` + `⋯` (contrainte utilisateur post-v1).
+- **Recommendations "on suppose que"** en Evidence trail -> remplacees par des URLs Mobbin/Perplexity concrets.
+
+### 12.e Outils utilises / echecs
+
+- `mcp__claude_ai_Mobbin__search_screens` — OK, 8 requetes reussies.
+- `mcp__claude_ai_Mobbin__search_flows` — OK, 2 requetes reussies.
+- `mcp__claude_ai_Mobbin__search_sections` — non appele (les 2 outils precedents ont suffi pour l'evidence attendue).
+- `mcp__perplexity__perplexity_ask` — OK apres 1 rate-limit 429 (retry fusionne avec succes).
+- `mcp__mobbin__authenticate` — non necessaire (les tools `claude_ai_Mobbin__*` etaient deja utilisables sans auth).
+- Aucun outil refuse par le sandbox cette session.
