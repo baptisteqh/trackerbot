@@ -13,7 +13,7 @@ import logging
 import sys
 from collections.abc import Sequence
 
-from .config import Config, charger_config
+from .config import ROOT, Config, charger_config
 from .fundamentals import Fondamentaux
 from .fundamentals import fondamentaux as recuperer_fondamentaux
 from .market import cotations as recuperer_cotations
@@ -26,6 +26,9 @@ from .signals import Seuils, evaluer_portefeuille
 from .sources.base import SourcePortefeuille
 from .sources.etoro import ClientEtoro, ErreurEtoro
 from .sources.fichier_local import SourceFichier
+from .storage import sauvegarder as sauvegarder_snapshot
+
+CHEMIN_HISTORIQUE = ROOT / "data" / "history.db"
 
 logger = logging.getLogger("trackerbot")
 
@@ -141,6 +144,9 @@ def _cmd_status(args: argparse.Namespace, config: Config) -> int:
         cotation_benchmark=benchmark,
         fondamentaux=fonds,
     )
+    # Snapshot silencieux : uniquement quand les prix sont reels.
+    if cotations:
+        sauvegarder_snapshot(rapport, CHEMIN_HISTORIQUE)
     print(formater_rapport(rapport))
     return 0
 

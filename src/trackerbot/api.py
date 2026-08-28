@@ -22,7 +22,7 @@ from fastapi.encoders import jsonable_encoder
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from .config import charger_config
+from .config import ROOT, charger_config
 from .fundamentals import Fondamentaux
 from .fundamentals import fondamentaux as _fondamentaux_defaut
 from .market import cotations as _cotations_defaut
@@ -30,9 +30,14 @@ from .metrics import serie_equity_portefeuille
 from .models import Cotation, Position
 from .report import Rapport, construire_rapport
 from .signals import Seuils, evaluer_portefeuille
+from .storage import deltas as _deltas
+from .storage import sauvegarder as _sauvegarder
 
 # Origines autorisees : le dev server Next.js uniquement.
 _ORIGINES_AUTORISEES = ("http://localhost:3000", "http://127.0.0.1:3000")
+
+# Historique par defaut : co-localise avec le portefeuille dans data/. Ignore par git.
+CHEMIN_HISTORIQUE_DEFAUT = ROOT / "data" / "history.db"
 
 
 def _charger_positions_defaut() -> list[Position]:
@@ -79,8 +84,15 @@ def create_app() -> FastAPI:
             cotation_benchmark=cotation_benchmark,
             fondamentaux=fonds,
         )
+
+        # Historique : on ne sauvegarde que quand les prix sont reels (sinon
+        # on ecrirait le PnL d'aujourd'hui base sur les prix d'entree).
+        if cotations:
+            _sauvegarder(rap, CHEMIN_HISTORIQUE_DEFAUT)
+
         payload = _serialiser_rapport(rap)
         payload["equity_series"] = serie_equity_portefeuille(positions, cotations)
+        payload["deltas"] = jsonable_encoder(_deltas(rap, CHEMIN_HISTORIQUE_DEFAUT))
         return JSONResponse(payload)
 
     @app.get("/health")

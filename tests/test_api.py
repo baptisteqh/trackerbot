@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Iterator
 from datetime import date
+from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
@@ -36,6 +37,7 @@ def cotations() -> dict[str, Cotation]:
 @pytest.fixture
 def client(
     monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
     portefeuille: list[Position],
     cotations: dict[str, Cotation],
 ) -> Iterator[TestClient]:
@@ -53,6 +55,8 @@ def client(
             "AAA": Fondamentaux(ticker="AAA", per=12.0, price_to_book=1.4, marge_nette_pct=15.0),
         },
     )
+    # Historique isole du disque : jamais d'ecriture dans data/ pendant les tests.
+    monkeypatch.setattr(api, "CHEMIN_HISTORIQUE_DEFAUT", tmp_path / "history.db")
     with TestClient(api.create_app()) as tc:
         yield tc
 
@@ -79,8 +83,10 @@ class TestRapport:
             "tickers_manquants",
             "metriques",
             "equity_series",
+            "deltas",
         }
         assert isinstance(data["equity_series"], list)
+        assert set(data["deltas"]) >= {"pnl_1d_abs", "pnl_1d_pct", "pnl_7d_abs", "pnl_30d_abs"}
         # date serialisee en ISO string.
         assert isinstance(data["genere_le"], str)
         assert len(data["genere_le"]) == 10  # yyyy-mm-dd
@@ -135,11 +141,15 @@ class TestCors:
 
 class TestErreurs:
     def test_500_si_positions_loader_leve(
-        self, monkeypatch: pytest.MonkeyPatch, cotations: dict[str, Cotation]
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        tmp_path: Path,
+        cotations: dict[str, Cotation],
     ) -> None:
         def raise_(): raise RuntimeError("plus de portefeuille")
         monkeypatch.setattr(api, "positions_loader", raise_)
         monkeypatch.setattr(api, "cotations_fetcher", lambda t: {})
+        monkeypatch.setattr(api, "CHEMIN_HISTORIQUE_DEFAUT", tmp_path / "history.db")
         with TestClient(api.create_app()) as tc:
             response = tc.get("/rapport")
             assert response.status_code == 500
