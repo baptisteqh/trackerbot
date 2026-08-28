@@ -14,6 +14,8 @@ import sys
 from collections.abc import Sequence
 
 from .config import Config, charger_config
+from .fundamentals import Fondamentaux
+from .fundamentals import fondamentaux as recuperer_fondamentaux
 from .market import cotations as recuperer_cotations
 from .models import Cotation, Niveau, Position, Signal
 from .notify.telegram import ErreurTelegram
@@ -80,6 +82,11 @@ def _construire_parseur() -> argparse.ArgumentParser:
         default="SPY",
         help="ticker de reference pour le beta (defaut SPY, vide pour ignorer)",
     )
+    p_status.add_argument(
+        "--fondamentaux",
+        action="store_true",
+        help="ajoute les fondamentaux et le score de valorisation (appel yfinance en plus)",
+    )
     p_status.set_defaults(executer=_cmd_status)
 
     p_watch = sous.add_parser(
@@ -119,7 +126,14 @@ def _cmd_status(args: argparse.Namespace, config: Config) -> int:
     cotations = {} if args.sans_cotations else recuperer_cotations(tickers)
     signaux = evaluer_portefeuille(positions, cotations, Seuils())
     benchmark = _cotation_benchmark(args.benchmark, args.sans_cotations)
-    rapport = construire_rapport(positions, cotations, signaux, cotation_benchmark=benchmark)
+    fonds = _fondamentaux_pour(tickers, args.fondamentaux, args.sans_cotations)
+    rapport = construire_rapport(
+        positions,
+        cotations,
+        signaux,
+        cotation_benchmark=benchmark,
+        fondamentaux=fonds,
+    )
     print(formater_rapport(rapport))
     return 0
 
@@ -129,6 +143,15 @@ def _cotation_benchmark(ticker: str | None, hors_ligne: bool) -> Cotation | None
     if hors_ligne or not ticker:
         return None
     return recuperer_cotations([ticker]).get(ticker.strip().upper())
+
+
+def _fondamentaux_pour(
+    tickers: list[str], demande: bool, hors_ligne: bool
+) -> dict[str, Fondamentaux] | None:
+    """Ne recupere les fondamentaux que sur demande explicite et en ligne."""
+    if hors_ligne or not demande or not tickers:
+        return None
+    return recuperer_fondamentaux(tickers)
 
 
 def _cmd_watch(args: argparse.Namespace, config: Config) -> int:

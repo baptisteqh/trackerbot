@@ -11,10 +11,12 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import date
 
+from .fundamentals import Fondamentaux
 from .indicators import rsi, sma, volatilite_pct
 from .metrics import MetriquesPortefeuille, calculer_metriques
 from .models import Cotation, Niveau, Position, Signal
 from .research import Veille
+from .valuation import ScoreValorisation, scorer
 
 
 @dataclass(frozen=True)
@@ -32,6 +34,8 @@ class LignePortefeuille:
     sma_20: float | None
     sma_50: float | None
     volatilite_20j_pct: float | None
+    fondamentaux: Fondamentaux | None = None
+    score_valorisation: ScoreValorisation | None = None
 
     @property
     def ticker(self) -> str:
@@ -85,10 +89,12 @@ def construire_rapport(
     veille: Veille | None = None,
     aujourdhui: date | None = None,
     cotation_benchmark: Cotation | None = None,
+    fondamentaux: dict[str, Fondamentaux] | None = None,
 ) -> Rapport:
     """Rassemble tout dans un objet Rapport sans effet de bord."""
     valeurs = _valeurs_courantes(positions, cotations)
     total = sum(valeurs.values()) or 0.0
+    fonds = fondamentaux or {}
     lignes: list[LignePortefeuille] = []
 
     for position in positions:
@@ -97,6 +103,7 @@ def construire_rapport(
         poids = 0.0 if total == 0 else (valeur / total) * 100.0
         prix_reference = cotation.prix if cotation is not None else position.prix_entree
         clotures = cotation.clotures if cotation is not None else []
+        fond = fonds.get(position.ticker)
 
         lignes.append(
             LignePortefeuille(
@@ -111,6 +118,8 @@ def construire_rapport(
                 sma_20=sma(clotures, 20),
                 sma_50=sma(clotures, 50),
                 volatilite_20j_pct=volatilite_pct(clotures, 20),
+                fondamentaux=fond,
+                score_valorisation=scorer(fond) if fond is not None else None,
             )
         )
 
@@ -170,6 +179,11 @@ def formater_rapport(rapport: Rapport) -> str:
     for ligne in sorted(rapport.lignes, key=lambda x: x.poids_pct, reverse=True):
         lignes.append(_formater_ligne(ligne))
 
+    bloc_valorisation = _formater_valorisations(rapport.lignes)
+    if bloc_valorisation:
+        lignes.append("")
+        lignes.extend(bloc_valorisation)
+
     lignes.append("")
     if rapport.signaux:
         lignes.append("Signaux :")
@@ -217,6 +231,39 @@ def _optionnel(libelle: str, valeur: float | None, fmt: str) -> str | None:
 
 def _joindre(*parts: str | None) -> str:
     return " | ".join(p for p in parts if p)
+
+
+def _formater_valorisations(lignes: list[LignePortefeuille]) -> list[str]:
+    """Une ligne par ticker qui a un score, sinon rien du tout."""
+    avec_score = [
+        ligne for ligne in lignes if ligne.score_valorisation is not None
+    ]
+    if not avec_score:
+        return []
+    avec_score.sort(
+        key=lambda ligne: ligne.score_valorisation.score if ligne.score_valorisation else 0,
+        reverse=True,
+    )
+    return [
+        "Valorisation :",
+        *(f"  {_formater_valorisation(ligne)}" for ligne in avec_score),
+    ]
+
+
+def _formater_valorisation(ligne: LignePortefeuille) -> str:
+    score = ligne.score_valorisation
+    fond = ligne.fondamentaux
+    assert score is not None and fond is not None  # garanti par le filtre appelant
+    parts = _joindre(
+        _optionnel("PER", fond.per, "{:.1f}"),
+        _optionnel("PB", fond.price_to_book, "{:.1f}"),
+        _optionnel("marge", fond.marge_nette_pct, "{:.1f}%"),
+        _optionnel("D/E", fond.debt_to_equity, "{:.2f}"),
+        _optionnel("ROE", fond.roe_pct, "{:.1f}%"),
+    )
+    return f"{ligne.ticker} score {score.score}/{score.maximum} | {parts}" if parts else (
+        f"{ligne.ticker} score {score.score}/{score.maximum}"
+    )
 
 
 def _formater_ligne(ligne: LignePortefeuille) -> str:
