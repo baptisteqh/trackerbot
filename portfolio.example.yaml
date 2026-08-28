@@ -1,0 +1,31 @@
+# Exemple de portefeuille local pour trackerbot.
+#
+# Copier ce fichier vers data/portfolio.yaml pour l'utiliser.
+# data/ et portfolio.yaml sont ignores par git : rien ne partira sur GitHub.
+#
+# Champs obligatoires par position : ticker, quantite, prix_entree.
+# Champs optionnels : est_long (true par defaut), stop_loss, take_profit,
+# ouverte_le (YYYY-MM-DD), libelle.
+#
+# Les tickers doivent etre ceux compris par Yahoo Finance
+# (par exemple AAPL, MC.PA, VWCE.DE).
+
+positions:
+  - ticker: AAPL
+    libelle: Apple Inc.
+    quantite: 10
+    prix_entree: 172.50
+    stop_loss: 155.00
+    take_profit: 220.00
+    ouverte_le: 2024-11-04
+
+  - ticker: MSFT
+    libelle: Microsoft
+    quantite: 4
+    prix_entree: 410.00
+    stop_loss: 380.00
+
+  - ticker: VWCE.DE
+    libelle: Vanguard FTSE All-World UCITS ETF
+    quantite: 25
+    prix_entree: 112.30

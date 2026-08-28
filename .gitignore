@@ -1,0 +1,24 @@
+# Secrets et donnees personnelles : rien de tout cela ne part sur GitHub.
+.env
+.env.*
+!.env.example
+data/*
+!data/.gitkeep
+portfolio.yaml
+*.xlsx
+*.csv
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.egg-info/
+dist/
+build/
+
+# macOS
+.DS_Store
