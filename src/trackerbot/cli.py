@@ -15,7 +15,7 @@ from collections.abc import Sequence
 
 from .config import Config, charger_config
 from .market import cotations as recuperer_cotations
-from .models import Niveau, Position, Signal
+from .models import Cotation, Niveau, Position, Signal
 from .notify.telegram import ErreurTelegram
 from .notify.telegram import envoyer as envoyer_telegram
 from .report import construire_rapport, formater_rapport
@@ -75,6 +75,11 @@ def _construire_parseur() -> argparse.ArgumentParser:
         action="store_true",
         help="n'appelle pas Yahoo Finance, utile hors ligne",
     )
+    p_status.add_argument(
+        "--benchmark",
+        default="SPY",
+        help="ticker de reference pour le beta (defaut SPY, vide pour ignorer)",
+    )
     p_status.set_defaults(executer=_cmd_status)
 
     p_watch = sous.add_parser(
@@ -113,9 +118,17 @@ def _cmd_status(args: argparse.Namespace, config: Config) -> int:
     tickers = [p.ticker for p in positions]
     cotations = {} if args.sans_cotations else recuperer_cotations(tickers)
     signaux = evaluer_portefeuille(positions, cotations, Seuils())
-    rapport = construire_rapport(positions, cotations, signaux)
+    benchmark = _cotation_benchmark(args.benchmark, args.sans_cotations)
+    rapport = construire_rapport(positions, cotations, signaux, cotation_benchmark=benchmark)
     print(formater_rapport(rapport))
     return 0
+
+
+def _cotation_benchmark(ticker: str | None, hors_ligne: bool) -> Cotation | None:
+    """Charge la cotation d'un ticker unique, silencieux si echec ou desactive."""
+    if hors_ligne or not ticker:
+        return None
+    return recuperer_cotations([ticker]).get(ticker.strip().upper())
 
 
 def _cmd_watch(args: argparse.Namespace, config: Config) -> int:

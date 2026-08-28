@@ -12,6 +12,7 @@ from dataclasses import dataclass, field
 from datetime import date
 
 from .indicators import rsi, sma, volatilite_pct
+from .metrics import MetriquesPortefeuille, calculer_metriques
 from .models import Cotation, Niveau, Position, Signal
 from .research import Veille
 
@@ -50,6 +51,7 @@ class Rapport:
     signaux: list[Signal]
     veille: Veille | None = None
     tickers_manquants: list[str] = field(default_factory=list)
+    metriques: MetriquesPortefeuille | None = None
 
     @property
     def montant_investi(self) -> float:
@@ -82,6 +84,7 @@ def construire_rapport(
     signaux: list[Signal] | None = None,
     veille: Veille | None = None,
     aujourdhui: date | None = None,
+    cotation_benchmark: Cotation | None = None,
 ) -> Rapport:
     """Rassemble tout dans un objet Rapport sans effet de bord."""
     valeurs = _valeurs_courantes(positions, cotations)
@@ -114,12 +117,19 @@ def construire_rapport(
     manquants = sorted(
         {p.ticker for p in positions if cotations.get(p.ticker) is None}
     )
+    metriques = calculer_metriques(
+        positions,
+        cotations,
+        [ligne.poids_pct for ligne in lignes],
+        cotation_benchmark=cotation_benchmark,
+    )
     return Rapport(
         genere_le=aujourdhui or date.today(),
         lignes=lignes,
         signaux=signaux or [],
         veille=veille,
         tickers_manquants=manquants,
+        metriques=metriques,
     )
 
 
@@ -149,6 +159,12 @@ def formater_rapport(rapport: Rapport) -> str:
         manquants = ", ".join(rapport.tickers_manquants)
         lignes.append(f"Cotations manquantes : {manquants}")
 
+    if rapport.metriques is not None:
+        bloc = _formater_metriques(rapport.metriques)
+        if bloc:
+            lignes.append("")
+            lignes.extend(bloc)
+
     lignes.append("")
     lignes.append("Positions :")
     for ligne in sorted(rapport.lignes, key=lambda x: x.poids_pct, reverse=True):
@@ -172,6 +188,35 @@ def formater_rapport(rapport: Rapport) -> str:
                 lignes.append(f"  - {source}")
 
     return "\n".join(lignes)
+
+
+def _formater_metriques(m: MetriquesPortefeuille) -> list[str]:
+    """Rendu compact ; on n'affiche que ce qui est mesurable."""
+    risque = _joindre(
+        _optionnel("Sharpe", m.sharpe, "{:.2f}"),
+        _optionnel("Vol", m.volatilite_annuelle_pct, "{:.1f}%"),
+        _optionnel("Rdmt", m.rendement_annuel_pct, "{:+.1f}%"),
+        _optionnel("MaxDD", m.max_drawdown_pct, "{:.1f}%"),
+    )
+    concentration = _joindre(
+        _optionnel("HHI", m.hhi, "{:.0f}"),
+        _optionnel("plus grosse", m.plus_grosse_position_pct, "{:.1f}%"),
+    )
+    beta = (
+        f"Beta vs {m.benchmark} : {m.beta:.2f}"
+        if m.beta is not None and m.benchmark is not None
+        else None
+    )
+    corps = [ligne for ligne in (risque, concentration, beta) if ligne]
+    return ["Metriques :", *(f"  {ligne}" for ligne in corps)] if corps else []
+
+
+def _optionnel(libelle: str, valeur: float | None, fmt: str) -> str | None:
+    return f"{libelle} {fmt.format(valeur)}" if valeur is not None else None
+
+
+def _joindre(*parts: str | None) -> str:
+    return " | ".join(p for p in parts if p)
 
 
 def _formater_ligne(ligne: LignePortefeuille) -> str:
