@@ -1,33 +1,38 @@
 # trackerbot
 
-Assistant personnel de suivi de portefeuille actions et ETF.
+Personal stock and ETF portfolio tracker.
 
-trackerbot lit les positions depuis eToro (API publique, lecture seule) ou
-depuis un fichier YAML local, calcule des indicateurs techniques sur les
-cours, evalue un jeu de regles de surveillance, produit un rapport lisible
-et pousse eventuellement les alertes par Telegram. Une commande separee
-recupere une veille de marche quotidienne via l'API Perplexity.
+trackerbot reads positions from eToro (public API, read-only) or from a
+local YAML file, computes technical indicators on prices, evaluates a set
+of watch rules, produces a readable report, and optionally pushes alerts
+to Telegram. A separate command fetches a daily market watch via the
+Perplexity API. A local dashboard (Next.js + shadcn) consumes the same
+data through a hardened HTTP endpoint.
 
-Le bot ne passe aucun ordre, ne modifie rien chez le courtier et n'ouvre
-aucun port : tout le trafic est sortant.
+The bot places no orders, modifies nothing on the broker side, and opens
+no inbound port: all traffic is outbound-only.
 
-Disclaimer : Personal project, built for my own use. Nothing in this repository constitutes investment advice or a recommendation to buy or sell any security. Past performance is not indicative of future results.
+Disclaimer: Personal project, built for my own use. Nothing in this
+repository constitutes investment advice or a recommendation to buy or
+sell any security. Past performance is not indicative of future results.
 Use at your own risk.
 
-## Contraintes de securite
+## Security posture
 
-- Depot publiable : aucun secret n'est ni ne doit etre commis. Toutes les
-  cles vivent dans un `.env` local, ignore par `.gitignore`. Seul
-  `.env.example` documente les variables attendues.
-- Positions privees : `data/` et `portfolio.yaml` sont ignores par git. Le
-  fichier `portfolio.example.yaml` fourni ne contient que des exemples.
-- Aucun endpoint d'ecriture eToro n'est implemente. Les cles doivent etre
-  emises avec le scope de lecture seule `etoro-public:trade.real:read`.
-- Aucun webhook Telegram : le bot appelle `sendMessage`, il n'ecoute pas.
+- Publishable repository: no secret is or should ever be committed. All
+  keys live in a local `.env` that `.gitignore` excludes. Only
+  `.env.example` documents the expected variables.
+- Private positions: `data/` and `portfolio.yaml` are gitignored. The
+  shipped `portfolio.example.yaml` only contains fictional entries.
+- No eToro write endpoint is implemented. Keys must be issued with the
+  read-only scope `etoro-public:trade.real:read`.
+- No Telegram webhook: the bot only calls `sendMessage`, it never listens.
+- The local HTTP API (`trackerbot serve`) binds to `127.0.0.1` only and
+  applies six defense-in-depth layers (see `src/trackerbot/api.py`).
 
 ## Installation
 
-Prerequis : Python 3.12.
+Requires Python 3.12.
 
 ```
 python3.12 -m venv .venv
@@ -35,124 +40,169 @@ source .venv/bin/activate
 pip install -e ".[dev]"
 ```
 
+The optional `[api]` extra installs FastAPI + uvicorn if you want to run
+the local HTTP server without the full dev toolchain:
+
+```
+pip install -e ".[api]"
+```
+
 ## Configuration
 
-Copier `.env.example` vers `.env` puis remplir ce qui est utilise :
+Copy `.env.example` to `.env` and fill in what you use:
 
 ```
 cp .env.example .env
 ```
 
-Variables :
+Variables:
 
-- `ETORO_API_KEY`, `ETORO_USER_KEY` : cles emises depuis le compte eToro
-  verifie, en lecture seule. `ETORO_ENVIRONMENT` vaut `demo` ou `real`
-  (rester sur `demo` tant que la lecture n'est pas validee).
-- `PERPLEXITY_API_KEY` : cle API Perplexity utilisee par la commande
-  `veille` et par `notify --avec-veille`.
-- `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID` : token du bot BotFather et
-  identifiant du seul chat autorise a recevoir les messages.
-- `PORTFOLIO_FILE` : chemin du portefeuille YAML utilise quand aucune cle
-  eToro n'est fournie. Par defaut `data/portfolio.yaml`.
+- `ETORO_API_KEY`, `ETORO_USER_KEY`: keys issued from the verified eToro
+  account, read-only. `ETORO_ENVIRONMENT` is `demo` or `real` (stay on
+  `demo` until real-account reads have been validated).
+- `PERPLEXITY_API_KEY`: Perplexity API key used by the `veille` command
+  and by `notify --avec-veille`.
+- `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`: BotFather token and the ID of
+  the single authorized chat that receives messages.
+- `PORTFOLIO_FILE`: path to the YAML portfolio used when no eToro key is
+  provided. Defaults to `data/portfolio.yaml`.
 
-Pour demarrer sans eToro, copier l'exemple :
+To start without eToro, copy the example:
 
 ```
 cp portfolio.example.yaml data/portfolio.yaml
 ```
 
-### Activer les cles eToro (lecture seule)
+### Activating eToro keys (read-only)
 
-1. Verifier le compte eToro (piece d'identite + justificatif) : l'acces
-   API n'est pas disponible avant la validation KYC.
-2. Depuis `https://www.etoro.com/settings/api`, generer une paire de cles
-   avec le seul scope `etoro-public:trade.real:read`. Aucun scope
-   d'ecriture n'est necessaire, aucun n'est utilise par le bot.
-3. Renseigner `ETORO_API_KEY` et `ETORO_USER_KEY` dans `.env`. Laisser
-   `ETORO_ENVIRONMENT=demo` tant que la lecture reelle n'est pas validee.
-4. Lancer `trackerbot doctor` pour confirmer que les cles sont lues et
-   que le portefeuille distant repond.
+1. Verify the eToro account (ID + proof of address): the API is not
+   available before KYC validation.
+2. From `https://www.etoro.com/settings/api`, generate a key pair with
+   only the `etoro-public:trade.real:read` scope. No write scope is
+   needed; none is used by the bot.
+3. Fill `ETORO_API_KEY` and `ETORO_USER_KEY` in `.env`. Keep
+   `ETORO_ENVIRONMENT=demo` until real-account reads have been validated.
+4. Run `trackerbot doctor` to confirm the keys are read and the remote
+   portfolio responds.
 
-Si eToro repond `401`, la cle n'a probablement pas les bons scopes ou le
-compte n'est pas verifie. Rien n'est jamais ecrit dans `.env` par le bot ;
-en cas de doute, revoquer la cle depuis l'interface eToro et regenerer.
+If eToro answers `401`, the key likely lacks the right scopes or the
+account is not verified. The bot never writes to `.env`; if in doubt,
+revoke the key from the eToro UI and reissue it.
 
-## Utilisation
+## Usage
 
-Toutes les commandes vivent derriere l'executable `trackerbot`.
+All commands live behind the `trackerbot` executable.
 
-| Commande                              | Effet                                                              |
+| Command                               | Effect                                                             |
 | ------------------------------------- | ------------------------------------------------------------------ |
-| `trackerbot status`                   | Rapport complet dans la console (positions + metriques + signaux). |
-| `trackerbot status --sans-cotations`  | Meme rapport, sans appel a Yahoo Finance.                          |
-| `trackerbot status --benchmark SPY`   | Ajoute le beta du portefeuille contre un benchmark (defaut SPY).   |
-| `trackerbot status --fondamentaux`    | Ajoute PER, marge, D/E, ROE et score de valorisation par position. |
-| `trackerbot watch`                    | Envoie sur Telegram uniquement s'il y a un signal grave.           |
-| `trackerbot notify`                   | Envoie le rapport complet sur Telegram.                            |
-| `trackerbot notify --avec-veille`     | Idem, en joignant la veille Perplexity du jour.                    |
-| `trackerbot veille`                   | Imprime la veille Perplexity du jour.                              |
-| `trackerbot doctor`                   | Verifie la configuration et l'acces aux integrations.              |
+| `trackerbot status`                   | Full report in the console (positions + metrics + signals).        |
+| `trackerbot status --sans-cotations`  | Same report, without calling Yahoo Finance.                        |
+| `trackerbot status --benchmark SPY`   | Adds portfolio beta against a benchmark (SPY by default).          |
+| `trackerbot status --fondamentaux`    | Adds PER, margin, D/E, ROE and a valuation score per position.     |
+| `trackerbot watch`                    | Sends to Telegram only if there is an ATTENTION or ALERT signal.   |
+| `trackerbot notify`                   | Sends the full report to Telegram.                                 |
+| `trackerbot notify --avec-veille`     | Same, appending the daily Perplexity market watch.                 |
+| `trackerbot veille`                   | Prints the daily Perplexity market watch.                          |
+| `trackerbot doctor`                   | Verifies configuration and integration access.                     |
+| `trackerbot serve`                    | Starts the local HTTP API (`127.0.0.1:8000`) for the dashboard.    |
 
-Ajouter `-v` pour activer les logs DEBUG.
+Add `-v` to enable DEBUG logs.
 
-## Regles de surveillance
+## Watch rules
 
-Les regles vivent dans `src/trackerbot/signals.py`. Elles sont pures et se
-declinent en trois niveaux : `info`, `attention`, `alerte`. La commande
-`watch` ne notifie que les deux niveaux les plus urgents.
+Rules live in `src/trackerbot/signals.py`. They are pure functions and
+come in three levels: `info`, `attention`, `alerte`. The `watch` command
+only notifies on the two most urgent levels.
 
-Regles disponibles :
+Available rules:
 
-- Stop-loss touche ou approche.
-- Take-profit atteint.
-- Repli marque depuis le plus haut recent.
-- Variation intraday au-dela d'un seuil.
-- Croisement de moyennes mobiles.
-- RSI en zone de surachat ou de survente.
-- Gain ou perte latente sortant de l'ordinaire.
+- Stop-loss hit or approaching.
+- Take-profit reached.
+- Marked pullback from the recent high.
+- Intraday move beyond a threshold.
+- Moving-average crossover.
+- RSI in overbought or oversold zone.
+- Unusual latent gain or loss.
 
-Les seuils sont regroupes dans la dataclasse `Seuils` et peuvent etre
-modifies sans toucher aux regles.
+Thresholds are grouped in the `Seuils` dataclass and can be tuned without
+touching rule code.
 
-## Metriques portefeuille
+## Portfolio metrics
 
-En plus des indicateurs par position, le rapport affiche un bloc niveau
-portefeuille : ratio de Sharpe annualise (taux sans risque par defaut 4 %),
-volatilite et rendement annualises, max drawdown, indice de concentration
-HHI, poids de la plus grosse ligne, et beta contre un benchmark (SPY par
-defaut, modifiable via `--benchmark`). Toutes les formules vivent dans
-`src/trackerbot/metrics.py` en fonctions pures.
+Beyond per-position indicators, the report shows a portfolio-level block:
+annualized Sharpe ratio (risk-free rate default 4%), annualized volatility
+and return, max drawdown, HHI concentration index, largest-position
+weight, and beta against a benchmark (SPY by default, tunable via
+`--benchmark`). All formulas live as pure functions in
+`src/trackerbot/metrics.py`.
 
-## Fondamentaux et score de valorisation
+## Fundamentals and valuation score
 
-`trackerbot status --fondamentaux` recupere via Yahoo (yfinance) les
-fondamentaux minimaux : PER, PB, marge nette, ratio dette/capital, ROE,
-rendement du dividende, croissance du chiffre d'affaires. Un score
-0 a 7 type Graham/Buffett-lite (`valuation.py`) recompense les criteres
-remplis : PER < 15, PB < 1.5, marge > 10 %, D/E < 1, ROE > 10 %,
-croissance > 5 %, dividende verse. Les seuils sont dans
-`SeuilsValorisation` et peuvent etre ajustes sans toucher aux regles.
+`trackerbot status --fondamentaux` fetches minimal fundamentals via Yahoo
+(yfinance): PER, PB, net margin, debt-to-equity ratio, ROE, dividend
+yield, revenue growth. A 0–7 Graham/Buffett-lite score
+(`valuation.py`) rewards the criteria met: PER < 15, PB < 1.5, margin >
+10%, D/E < 1, ROE > 10%, growth > 5%, dividend paid. Thresholds live in
+`SeuilsValorisation` and can be tuned without touching the rules.
 
-L'option est opt-in car chaque ticker declenche un appel supplementaire.
+The option is opt-in because each ticker triggers an extra network call.
+
+## Local dashboard
+
+A Next.js 16 + shadcn dashboard lives in `dashboard/`. Design tokens and
+component brief are documented in `dashboard/DESIGN.md`.
+
+To run it locally:
+
+```
+# terminal 1 — backend
+trackerbot serve
+
+# terminal 2 — frontend
+cd dashboard
+npm install
+npm run dev
+```
+
+Then open `http://localhost:3000`. If the backend is down the dashboard
+falls back to a hardcoded demo payload so you can preview the UI without
+running the API.
+
+### API surface
+
+Two endpoints (see `src/trackerbot/api.py` for the full threat model):
+
+- `GET /rapport` — reads the last successful report from cache.
+  Idempotent, no network side-effect. Safe against `<img>`-based CSRF.
+- `POST /refresh` — recomputes the report according to `{"scope":
+  "quotes" | "veille" | "fundamentals" | "all"}`. Requires a whitelisted
+  `Origin`, a valid `X-XSRF-Token` (double-submit against the `xsrf-token`
+  cookie set by `GET /csrf`), and a per-scope rate limit is enforced.
+
+The server refuses any `--host` other than `127.0.0.1` / `localhost` as a
+defense-in-depth measure.
 
 ## Structure
 
 ```
 src/trackerbot/
-  config.py         lecture des variables d'environnement
+  config.py         reads environment variables
   models.py         Position, Cotation, Signal, Niveau
-  indicators.py     SMA, RSI, croisements, volatilite (fonctions pures)
-  metrics.py        Sharpe, drawdown, HHI, beta (fonctions pures)
-  signals.py        regles de surveillance
-  fundamentals.py   fondamentaux Yahoo
-  valuation.py      score de valorisation (fonction pure)
-  market.py         acces cours via yfinance
-  research.py       veille Perplexity
-  report.py         agregation rapport
-  cli.py            commandes trackerbot
-  sources/          fichier local, eToro
-  notify/           envoi Telegram
-dashboard/          app Next.js + shadcn, consomme les donnees du bot
+  indicators.py     SMA, RSI, crossovers, volatility (pure functions)
+  metrics.py        Sharpe, drawdown, HHI, beta (pure functions)
+  signals.py        watch rules
+  fundamentals.py   Yahoo fundamentals
+  valuation.py      valuation score (pure function)
+  market.py         quote access via yfinance
+  research.py       Perplexity market watch
+  storage.py        SQLite history + JSON cache of the latest report
+  payload.py        Rapport -> dashboard JSON (stdlib only)
+  api.py            FastAPI HTTP API (opt-in extra)
+  report.py         report aggregation
+  cli.py            trackerbot commands
+  sources/          local file, eToro
+  notify/           Telegram sender
+dashboard/          Next.js + shadcn app consuming the bot data
 ```
 
 ## Tests
@@ -161,21 +211,21 @@ dashboard/          app Next.js + shadcn, consomme les donnees du bot
 pytest
 ```
 
-Les tests sont entierement offline : aucun appel reseau. Ils couvrent les
-indicateurs, les modeles, les regles, la configuration, le rapport et les
-sources de portefeuille.
+Tests are entirely offline: no network calls. They cover indicators,
+models, rules, configuration, report, sources, storage, API, and
+valuation.
 
-Verifications complementaires :
+Additional checks:
 
 ```
 ruff check .
 mypy
 ```
 
-## Limites
+## Limits
 
-- yfinance est un client non officiel de Yahoo Finance. Il peut casser :
-  toute la logique de recuperation vit dans `market.py`, et le rapport
-  degrade proprement les positions dont la cotation est absente.
-- Les signaux techniques ne sont pas des conseils d'investissement. Le
-  bot decrit ce qui se passe sur le marche, il ne dit pas quoi faire.
+- yfinance is an unofficial Yahoo Finance client. It breaks from time to
+  time: all quote-fetching logic lives in `market.py`, and the report
+  gracefully degrades positions whose quote is missing.
+- Technical signals are not investment advice. The bot describes what is
+  happening in the market; it does not tell you what to do.

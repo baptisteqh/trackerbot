@@ -145,15 +145,22 @@ def sauvegarder_rapport_complet(payload: dict[str, Any], chemin_json: Path) -> N
     `0600` : jamais lisible par un autre utilisateur.
     """
     _assurer_repertoire(chemin_json)
+    fd: int | None
     fd, chemin_tmp_str = tempfile.mkstemp(
         prefix=".rapport-", suffix=".json.tmp", dir=chemin_json.parent
     )
     try:
         os.fchmod(fd, 0o600)
-        with os.fdopen(fd, "w", encoding="utf-8") as fichier:
+        fichier = os.fdopen(fd, "w", encoding="utf-8")
+        fd = None  # os.fdopen a pris possession du descripteur.
+        with fichier:
             json.dump(payload, fichier, ensure_ascii=False)
         os.replace(chemin_tmp_str, chemin_json)
     except Exception:
+        # Avant fdopen, le descripteur reste a notre charge.
+        if fd is not None:
+            with contextlib.suppress(OSError):
+                os.close(fd)
         # Nettoyage best-effort si le rename n'a jamais eu lieu.
         with contextlib.suppress(FileNotFoundError):
             os.unlink(chemin_tmp_str)

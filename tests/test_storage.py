@@ -2,14 +2,17 @@
 
 from __future__ import annotations
 
+import os
+import tempfile
 from datetime import date
 from pathlib import Path
 
 import pytest
 
+import trackerbot.storage as storage
 from trackerbot.models import Position
 from trackerbot.report import Rapport, construire_rapport
-from trackerbot.storage import Deltas, deltas, sauvegarder
+from trackerbot.storage import Deltas, deltas, sauvegarder, sauvegarder_rapport_complet
 
 
 def _rapport(valeur: float, jour: date) -> Rapport:
@@ -40,6 +43,32 @@ class TestSauvegarder:
         # Un jour d'historique seulement : aucun delta calculable.
         d = deltas(_rapport(1050.0, jour), db)
         assert d == Deltas()
+
+
+class TestSauvegarderRapportComplet:
+    @pytest.mark.parametrize("operation_en_echec", ["fchmod", "fdopen"])
+    def test_ferme_le_descripteur_si_la_preparation_echoue(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        operation_en_echec: str,
+    ) -> None:
+        fd, chemin_tmp = tempfile.mkstemp(dir=tmp_path)
+        monkeypatch.setattr(
+            storage.tempfile, "mkstemp", lambda **_kwargs: (fd, chemin_tmp)
+        )
+
+        def echouer(*_args: object, **_kwargs: object) -> None:
+            raise OSError("echec simule")
+
+        monkeypatch.setattr(storage.os, operation_en_echec, echouer)
+
+        with pytest.raises(OSError, match="echec simule"):
+            sauvegarder_rapport_complet({}, tmp_path / "rapport.json")
+
+        with pytest.raises(OSError):
+            os.fstat(fd)
+        assert not Path(chemin_tmp).exists()
 
 
 class TestDeltas:

@@ -1,10 +1,20 @@
-import { Geist, Geist_Mono, Inter } from "next/font/google"
+import { Geist_Mono, Inter } from "next/font/google"
 
 import "./globals.css"
 import { ThemeProvider } from "@/components/theme-provider"
-import { cn } from "@/lib/utils";
+import { TooltipProvider } from "@/components/ui/tooltip"
+import { Toaster } from "@/components/ui/sonner"
+import { cn } from "@/lib/utils"
 
-const inter = Inter({subsets:['latin'],variable:'--font-sans'})
+// Inter uniquement pour le texte, Geist Mono pour les nombres.
+// L'esthetique voulue est "Apple-like" : sans-serif geometrique, poids
+// franc, aucun serif. `--font-display` (heritee du scaffold shadcn) est
+// alias sur Inter dans globals.css.
+const inter = Inter({
+  subsets: ["latin"],
+  variable: "--font-sans",
+  weight: ["400", "500", "600", "700"],
+})
 
 const fontMono = Geist_Mono({
   subsets: ["latin"],
@@ -20,10 +30,13 @@ export default function RootLayout({
     <html
       lang="en"
       suppressHydrationWarning
-      className={cn("antialiased", fontMono.variable, "font-sans", inter.variable)}
+      className={cn("antialiased dark", inter.variable, fontMono.variable, "font-sans")}
     >
       <body>
-        <ThemeProvider>{children}</ThemeProvider>
+        <ThemeProvider defaultTheme="dark" enableSystem={false}>
+          <TooltipProvider>{children}</TooltipProvider>
+          <Toaster position="bottom-right" theme="dark" />
+        </ThemeProvider>
       </body>
     </html>
   )

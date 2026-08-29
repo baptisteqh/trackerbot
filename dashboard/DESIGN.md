@@ -9,9 +9,9 @@
 
 ## 1. North star
 
-Un journal de bord d'investisseur, pas un terminal. Une page principale qui se lit comme une double-page de magazine financier : titres editoriaux en Fraunces, corps en Inter, fond creme, accents terracotta, chiffres cles en mono. Le PnL saute aux yeux avant les indicateurs techniques ; les signaux ressemblent a des notes de marge, jamais a des sirenes. On doit pouvoir imprimer la page et l'agrafer au cahier.
+Un dashboard trading pro, pas un journal de bord. Fond noir profond, chiffres bold en sans-serif type SF Pro (rendu Inter 600/700 sur le web), accents fluo pour ce qui bouge : vert vif pour le PnL positif et l'equity, rouge vif pour le PnL negatif, ambre pour les warnings. Le reste de l'interface reste sobre : bordures fines, aucune ombre inutile, aucune fantaisie (pas d'italique decoratif, pas de serif, pas de couleur "chaude"). Le PnL et l'equity sautent aux yeux ; le meta (labels, chrome) reste gris muet.
 
-Reference visuelle la plus proche parmi les ecrans reels examines cette session : **Origin (`/screens/3a516cce-...`)** — grille aeree, courbe portfolio vs benchmark, top movers en colonnes, holdings en pied. On s'en inspire pour la densite ; on divergeait sur la palette (Origin est vert/blanc, nous restons creme/terracotta).
+Reference visuelle la plus proche parmi les ecrans reels : [**Yahoo Finance iOS**](https://mobbin.com/screens/f90cf0d1-8f2f-424a-ad75-601345b47751) (fond noir, PnL vert/rouge fluo, chiffres bold Apple-esque, sparklines partout) et [**QuestMobile RRSP**](https://mobbin.com/screens/ed3dd312-6ff8-40aa-8837-b47a59ed801f) (aire d'equity en vert fluo sur noir absolu). Pour la densite web, [**Fey Screener**](https://mobbin.com/screens/920817af-adb1-4853-90ec-acd729c9101b) et [**Kraken Portfolio**](https://mobbin.com/screens/25b67ef9-d56e-4f69-865f-16a702da74b7).
 
 ---
 
@@ -164,87 +164,36 @@ Types TS : generer un `types.ts` a la main qui reflete `Rapport`, `LignePortefeu
 
 ## 6. Design tokens
 
-Palette (approximations hex ; les vraies valeurs restent en `oklch` pour rester coherent avec le scaffolding shadcn) :
+Dark = mode par defaut. Light reste fonctionnel mais tempere : le produit
+vit en dark, on ne teste ni ne calibre le light sur ecran plein. Le toggle
+`d` bascule pour ceux qui veulent.
 
-- Creme fond : `#F6F1E7` (light) / `#1A1712` (dark)
-- Creme surface : `#FBF6EC` / `#221E17`
-- Encre : `#1F1B16` / `#F3EEE3`
-- Terracotta 500 : `#C6633F`
-- Terracotta 700 : `#9C4A2E`
-- Terracotta 100 : `#F1D9CB`
-- Vert sobre (PnL +) : `#4E7A4B`
-- Rouge sobre (PnL −, alerte) : `#B24A3A` (proche terracotta pour cohesion)
-- Ambre attention : `#C79A3A`
-- Muted encre : `#7C6F5B`
+Palette hex (rendu final ; les valeurs `oklch` reelles sont dans
+`app/globals.css`) :
 
-A coller dans `app/globals.css` (remplace les blocs `:root` et `.dark` existants) :
+- Fond dark : `#0A0A0A` (`.dark`) / `#FAFAFA` (light)
+- Surface / card dark : `#141414` / `#FFFFFF`
+- Foreground dark : `#FAFAFA` / `#0A0A0A`
+- Border dark : `rgba(255,255,255,0.08)` / `rgba(0,0,0,0.10)`
+- Muted foreground dark : `#9E9E9E` / `#737373`
+- **Fluo green 500 (primary + PnL+ + equity)** : `#4EFF9F` dark / `#22A05E` light
+- **Fluo red 500 (destructive + PnL- + alerte)** : `#FF4A4A` dark / `#DC2626` light
+- **Fluo amber (attention)** : `#FFC64A` dark / `#D97706` light
+- Chart 4 (bench neutre) : `#B3B3B3` / gris moyen
 
-```css
-:root {
-    --background: oklch(0.955 0.024 82);          /* creme */
-    --foreground: oklch(0.22 0.02 60);             /* encre chaude */
-    --card: oklch(0.975 0.018 82);
-    --card-foreground: oklch(0.22 0.02 60);
-    --popover: oklch(0.975 0.018 82);
-    --popover-foreground: oklch(0.22 0.02 60);
-    --primary: oklch(0.55 0.14 40);                /* terracotta 500 */
-    --primary-foreground: oklch(0.98 0.01 80);
-    --secondary: oklch(0.92 0.03 75);
-    --secondary-foreground: oklch(0.28 0.03 55);
-    --muted: oklch(0.93 0.02 78);
-    --muted-foreground: oklch(0.5 0.03 60);
-    --accent: oklch(0.88 0.07 55);                 /* terracotta 100 */
-    --accent-foreground: oklch(0.3 0.08 40);
-    --destructive: oklch(0.55 0.16 30);
-    --border: oklch(0.88 0.02 70);
-    --input: oklch(0.9 0.02 70);
-    --ring: oklch(0.55 0.14 40);
-    --chart-1: oklch(0.55 0.14 40);                /* terracotta */
-    --chart-2: oklch(0.7 0.09 45);
-    --chart-3: oklch(0.5 0.05 65);
-    --chart-4: oklch(0.65 0.09 100);               /* ambre */
-    --chart-5: oklch(0.45 0.08 150);               /* vert sobre */
-    --pnl-positive: oklch(0.5 0.08 150);           /* vert sobre PnL + */
-    --pnl-negative: oklch(0.55 0.15 30);           /* rouge terracotta PnL - */
-    --radius: 0.5rem;
-}
-
-.dark {
-    --background: oklch(0.18 0.01 55);
-    --foreground: oklch(0.94 0.02 80);
-    --card: oklch(0.22 0.01 55);
-    --card-foreground: oklch(0.94 0.02 80);
-    --popover: oklch(0.22 0.01 55);
-    --popover-foreground: oklch(0.94 0.02 80);
-    --primary: oklch(0.68 0.13 42);
-    --primary-foreground: oklch(0.18 0.02 40);
-    --secondary: oklch(0.28 0.02 55);
-    --secondary-foreground: oklch(0.94 0.02 80);
-    --muted: oklch(0.28 0.02 55);
-    --muted-foreground: oklch(0.72 0.02 70);
-    --accent: oklch(0.35 0.06 45);
-    --accent-foreground: oklch(0.94 0.02 80);
-    --destructive: oklch(0.65 0.15 30);
-    --border: oklch(1 0 0 / 8%);
-    --input: oklch(1 0 0 / 12%);
-    --ring: oklch(0.68 0.13 42);
-    --chart-1: oklch(0.72 0.13 42);
-    --chart-2: oklch(0.6 0.09 50);
-    --chart-3: oklch(0.65 0.04 70);
-    --chart-4: oklch(0.75 0.1 100);
-    --chart-5: oklch(0.6 0.09 150);
-    --pnl-positive: oklch(0.65 0.09 150);
-    --pnl-negative: oklch(0.68 0.15 30);
-}
-```
+Bordures fines uniquement, aucune ombre, radius `0.375rem` (`--radius`)
+plus sec que le defaut shadcn — plus proche d'un terminal que d'un editorial.
 
 Typographie :
 
-- Ajouter Fraunces via `next/font/google` (`variable: '--font-display'`, subsets latin, poids 400/500/600, italic on). L'ajouter dans `@theme inline` : `--font-display: var(--font-display);` puis dans `<html>` : `className={cn(..., fraunces.variable)}`.
-- Utility : `font-display` -> Fraunces (titres, chiffres editoriaux), `font-sans` -> Inter (corps, labels), `font-mono` -> Geist Mono (chiffres de tableau, prix, tickers).
-- Echelle : display XL `text-4xl md:text-5xl`, section `text-2xl`, tuile chiffre `text-3xl font-mono`, label `text-xs uppercase tracking-[0.14em] text-muted-foreground`, corps `text-sm`.
+- **Inter** (`variable: '--font-sans'`, weights 400/500/600/700) — TOUT le texte de l'app.
+  Alias : `--font-display: var(--font-sans)` pour que les classes `font-display` heritees rendent Inter. Un `.font-display { font-weight: 600; letter-spacing: -0.01em }` dans `@layer base` donne le rendu bold Apple-esque sans toucher chaque composant.
+- **Geist Mono** (`--font-mono`) — chiffres des tuiles et du tableau (`font-mono tabular-nums`).
+- **Aucun serif, aucun italic decoratif.** Fraunces retire du scaffold. L'italic est autorise UNIQUEMENT pour du meta contextuel (ex : "missing quote" sur une ligne de position).
+- Echelle : hero tuile `text-4xl font-mono font-semibold tabular-nums`, section `text-2xl font-display`, label `text-xs uppercase tracking-[0.14em] text-muted-foreground`, corps `text-sm`.
 
-Espacement : gap standard 16 / 24 / 32. Radius : `--radius: 0.5rem` (moins arrondi que le defaut shadcn pour un rendu editorial). Bordures : `border-border/70` partout, jamais d'ombre lourde ; au maximum `shadow-[0_1px_0_rgb(0_0_0/0.04)]` pour les cartes.
+Espacement : gap standard 16 / 24. Fond des cards : `bg-card` (`#141414`),
+border 1px `border-border` (`rgba(255,255,255,0.08)`), pas d'ombre.
 
 ---
 
@@ -364,28 +313,33 @@ Requetes cette session via `mcp__claude_ai_Mobbin__search_screens` / `_flows` (p
    - Sources : ui.shadcn.com/examples/dashboard — https://ui.shadcn.com/examples/dashboard ; github shadcn-ui/ui — https://github.com/shadcn-ui/ui
    - Recommandation retenue : `Breadcrumb -> Typography-led headline -> Chart as lead visual -> Tabs for related coverage`. Adopte partiellement : Breadcrumb reporte en V2 (§4), le reste applique en V1.
 
-### 12.c Ce que v1 avait juste (et qu'on conserve tel quel)
+### 12.c Ce que v1/v2 avaient juste (conserve tel quel)
 
 - Grille 12 colonnes `max-w-[1240px]`, gap 24 — conserve.
 - Ordre des sections Overview (header -> tuiles -> equity+donut -> table -> 3 cartes en pied -> footer) — conserve.
-- Palette creme + terracotta oklch — conserve (mais on ajoute `--pnl-positive` / `--pnl-negative` pour clarifier les deltas).
-- Fraunces + Inter + Geist Mono — conserve.
 - Ne pas notifier depuis le dashboard (Telegram est deja le canal) — conserve.
-- Empty states editoriaux en italique Fraunces — conserve, traduits en anglais.
 - Skeleton par section, jamais spinner plein ecran — conserve.
+- Payload API (`Rapport` + `equity_series` + `deltas`) — conserve.
 
-### 12.d Ce que v1 recommandait et qu'on abandonne / modifie
+### 12.d Ce que v2 recommandait et qu'on abandonne (pivot v3 : dashboard pro)
 
-- **Libelles francais** -> tous les UI copy passent en anglais (contrainte utilisateur post-v1).
-- **Historique multi-jours en non-goal** -> supprime, `deltas` fait partie du payload (contrainte utilisateur post-v1).
-- **Refresh = tout** -> refresh scoped avec split `Refresh` + `⋯` (contrainte utilisateur post-v1).
-- **Recommendations "on suppose que"** en Evidence trail -> remplacees par des URLs Mobbin/Perplexity concrets.
+- **Palette creme + terracotta** -> pivot noir + fluo vert/rouge. Contrainte utilisateur post-v2 : "surtout pas de terracotta de creme et de marron, va a fond sur le noir avec des traits fluo".
+- **Fraunces (serif editorial)** -> retire. Inter partout, `--font-display` alias sur Inter avec `.font-display { font-weight: 600 }` en base layer.
+- **Empty states italique Fraunces** -> abandonner l'italique decoratif. Empty states = simple `text-muted-foreground` (voir §7).
+- **"Journal de bord / magazine financier"** -> pivot vers "dashboard trading pro". Densite table-first ala Fey/Kraken.
 
-### 12.e Outils utilises / echecs
+### 12.e Nouvelles references Mobbin pour le pivot v3 (dark + fluo)
 
-- `mcp__claude_ai_Mobbin__search_screens` — OK, 8 requetes reussies.
-- `mcp__claude_ai_Mobbin__search_flows` — OK, 2 requetes reussies.
-- `mcp__claude_ai_Mobbin__search_sections` — non appele (les 2 outils precedents ont suffi pour l'evidence attendue).
-- `mcp__perplexity__perplexity_ask` — OK apres 1 rate-limit 429 (retry fusionne avec succes).
-- `mcp__mobbin__authenticate` — non necessaire (les tools `claude_ai_Mobbin__*` etaient deja utilisables sans auth).
-- Aucun outil refuse par le sandbox cette session.
+Requetes cette session via `mcp__claude_ai_Mobbin__search_screens` :
+
+- **"eToro portfolio overview screen with holdings list, total value, PnL and chart"** (web) — resultats principalement blancs (Monarch, Origin, Copilot Money, Cake Equity) mais on retient [Gemini web Portfolio](https://mobbin.com/screens/cc6a1261-a495-4977-8ca8-36d9a20b46db) (fond noir, chart rouge fluo, gros nombre blanc bold) et [Kraken Pro](https://mobbin.com/screens/87cf22f4-48fa-474b-9ac1-ffe8eba368b1).
+- **"Delta portfolio tracker dark mode with holdings breakdown and equity chart"** (ios) — [Yahoo Finance iOS](https://mobbin.com/screens/f90cf0d1-8f2f-424a-ad75-601345b47751) est la reference #1 (noir absolu, PnL vert/rouge fluo, chiffres bold, sparklines colorees), [Crypto.com](https://mobbin.com/screens/8505ff3c-ef22-46a9-b33e-3ae2bcdd39dc) et [QuestMobile RRSP](https://mobbin.com/screens/ed3dd312-6ff8-40aa-8837-b47a59ed801f) (aire d'equity vert fluo pleine largeur).
+- **"dark mode trading dashboard with neon green red PnL indicators and equity chart"** (web) — [Binance Spot Grid](https://mobbin.com/screens/1dd4caa0-4a84-41db-ae44-37298bd785ff), [OKX](https://mobbin.com/screens/d83ddd9e-f689-41f1-9d29-1ca6070bcfac), [Coinbase](https://mobbin.com/screens/a372b65a-4ac3-4ff6-b9c3-a5bbb4ee42ad), [Gemini](https://mobbin.com/screens/a457e291-74c3-4bf7-a9e4-9f2ea3a97211) — densite pro, chiffres partout, colonnes de couleur, aucune fantaisie.
+- **"portfolio holdings table with sparklines, weight, PnL columns on dark background"** (web) — [Fey Screener](https://mobbin.com/screens/920817af-adb1-4853-90ec-acd729c9101b) est la reference table (fond noir, monospace pour les nombres, PnL rouge/vert, sparklines mini). [Kraken](https://mobbin.com/screens/25b67ef9-d56e-4f69-865f-16a702da74b7) aussi.
+
+### 12.f Outils utilises / echecs
+
+- `mcp__claude_ai_Mobbin__search_screens` — OK a chaque requete v1 + v2 + v3.
+- `mcp__claude_ai_Mobbin__search_flows` — OK sur v2 uniquement.
+- `mcp__perplexity__perplexity_ask` — OK sur v2 uniquement.
+- `mcp__mobbin__authenticate` — jamais necessaire.
