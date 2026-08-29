@@ -1,27 +1,30 @@
-"""Historique local des rapports, stocke en SQLite.
+"""Persistance locale des rapports : historique SQLite et cache complet.
 
-Pourquoi SQLite plutot que des fichiers JSON dates : une seule table, une
-requete pour le point d'il y a N jours, aucune serialisation ad-hoc, et
-la stdlib suffit. La base vit dans `data/history.db`, comme le YAML des
-positions, donc elle est deja ignoree par `.gitignore` (`data/*`).
+Deux artefacts, deux roles :
 
-Design :
+1. `history.db` (SQLite) : un snapshot scalaire par jour pour calculer
+   les deltas 1j/7j/30j. Upsert par jour, aucune duplication.
+2. `latest_rapport.json` : la representation complete et serialisee du
+   dernier rapport reussi. C'est cette copie que l'API `GET /rapport`
+   sert au dashboard, ce qui rend le GET **strictement idempotent et
+   sans effet reseau** (indispensable pour se proteger des CSRF via
+   `<img>` ou `<script>` qui pourraient sinon declencher des appels
+   yfinance ou Perplexity depuis n'importe quel site visite).
 
-- **Un snapshot par jour et par base**. Si on rejoue le meme jour on
-  ecrase (upsert) : les rapports en cours de journee sont volatils.
-- **Ecriture opportuniste**. Un rapport genere hors ligne (sans
-  cotations) n'ajoute rien : mesurer un delta sur un rapport factice
-  serait faux.
-- **Lecture stricte**. `deltas()` renvoie None sur chaque champ quand
-  l'historique ne remonte pas assez loin ; on n'invente rien.
+La base et le JSON vivent dans `data/`, deja ignore par `.gitignore`.
 """
 
 from __future__ import annotations
 
+import contextlib
+import json
+import os
 import sqlite3
+import tempfile
 from dataclasses import dataclass
 from datetime import date, timedelta
 from pathlib import Path
+from typing import Any
 
 from .report import Rapport
 
@@ -129,3 +132,43 @@ def _connexion(chemin_db: Path) -> sqlite3.Connection:
 
 def _assurer_repertoire(chemin_db: Path) -> None:
     chemin_db.parent.mkdir(parents=True, exist_ok=True)
+
+
+# ---------- Cache du dernier rapport complet (JSON) ---------- #
+
+
+def sauvegarder_rapport_complet(payload: dict[str, Any], chemin_json: Path) -> None:
+    """Ecrit le payload API du dernier rapport reussi, atomiquement.
+
+    Le fichier est reecrit via `tempfile + os.replace` pour eviter qu'un
+    lecteur concurrent voie un JSON tronque. Les permissions restent
+    `0600` : jamais lisible par un autre utilisateur.
+    """
+    _assurer_repertoire(chemin_json)
+    fd, chemin_tmp_str = tempfile.mkstemp(
+        prefix=".rapport-", suffix=".json.tmp", dir=chemin_json.parent
+    )
+    try:
+        os.fchmod(fd, 0o600)
+        with os.fdopen(fd, "w", encoding="utf-8") as fichier:
+            json.dump(payload, fichier, ensure_ascii=False)
+        os.replace(chemin_tmp_str, chemin_json)
+    except Exception:
+        # Nettoyage best-effort si le rename n'a jamais eu lieu.
+        with contextlib.suppress(FileNotFoundError):
+            os.unlink(chemin_tmp_str)
+        raise
+
+
+def charger_rapport_complet(chemin_json: Path) -> dict[str, Any] | None:
+    """Renvoie le dernier rapport connu, ou None si aucune sauvegarde encore."""
+    if not chemin_json.exists():
+        return None
+    try:
+        with chemin_json.open("r", encoding="utf-8") as fichier:
+            donnees: dict[str, Any] = json.load(fichier)
+    except (OSError, json.JSONDecodeError):
+        # Cache corrompu : on prefere renvoyer None que servir un ancien
+        # payload potentiellement invalide. Le prochain refresh reecrira.
+        return None
+    return donnees

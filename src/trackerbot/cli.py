@@ -20,15 +20,19 @@ from .market import cotations as recuperer_cotations
 from .models import Cotation, Niveau, Position, Signal
 from .notify.telegram import ErreurTelegram
 from .notify.telegram import envoyer as envoyer_telegram
+from .payload import payload_pour_dashboard
 from .report import construire_rapport, formater_rapport
 from .research import Veille, veille_du_jour
 from .signals import Seuils, evaluer_portefeuille
 from .sources.base import SourcePortefeuille
 from .sources.etoro import ClientEtoro, ErreurEtoro
 from .sources.fichier_local import SourceFichier
+from .storage import deltas as calculer_deltas
 from .storage import sauvegarder as sauvegarder_snapshot
+from .storage import sauvegarder_rapport_complet
 
 CHEMIN_HISTORIQUE = ROOT / "data" / "history.db"
+CHEMIN_CACHE_RAPPORT = ROOT / "data" / "latest_rapport.json"
 
 logger = logging.getLogger("trackerbot")
 
@@ -144,9 +148,19 @@ def _cmd_status(args: argparse.Namespace, config: Config) -> int:
         cotation_benchmark=benchmark,
         fondamentaux=fonds,
     )
-    # Snapshot silencieux : uniquement quand les prix sont reels.
+    # Snapshot silencieux + cache du payload complet : uniquement quand les
+    # prix sont reels (persister un rapport a base de prix d'entree serait
+    # trompeur pour le dashboard).
     if cotations:
         sauvegarder_snapshot(rapport, CHEMIN_HISTORIQUE)
+        payload = payload_pour_dashboard(
+            rapport,
+            positions,
+            cotations,
+            benchmark,
+            calculer_deltas(rapport, CHEMIN_HISTORIQUE),
+        )
+        sauvegarder_rapport_complet(payload, CHEMIN_CACHE_RAPPORT)
     print(formater_rapport(rapport))
     return 0
 
