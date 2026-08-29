@@ -97,6 +97,40 @@ export interface Deltas {
   pnl_30d_pct: number | null
 }
 
+export interface PaireCorrelation {
+  ticker_a: string
+  ticker_b: string
+  correlation: number
+}
+
+export interface Diversification {
+  poids_par_secteur: Record<string, number>
+  hhi_secteurs: number | null
+  plus_gros_secteur: string | null
+  plus_gros_secteur_pct: number | null
+  positions_effectives: number | null
+  ratio_diversification: number | null
+  correlation_moyenne: number | null
+  paires_correlees: PaireCorrelation[]
+}
+
+export type BenchmarkWindow = "1M" | "3M" | "YTD" | "1Y"
+
+export interface ComparaisonBenchmark {
+  benchmark: string
+  perf_portefeuille: Record<BenchmarkWindow, number | null>
+  perf_benchmark: Record<BenchmarkWindow, number | null>
+  outperformance: Record<BenchmarkWindow, number | null>
+}
+
+export interface Badge {
+  id: string
+  label: string
+  description: string
+  unlocked: boolean
+  detail: string | null
+}
+
 export interface Rapport {
   genere_le: string // ISO date
   lignes: LignePortefeuille[]
@@ -106,6 +140,9 @@ export interface Rapport {
   metriques: Metriques | null
   equity_series: EquitySeries
   deltas: Deltas
+  diversification: Diversification
+  comparaison_benchmark: ComparaisonBenchmark | null
+  badges: Badge[]
 }
 
 export type RefreshScope = "quotes" | "veille" | "fundamentals" | "all"

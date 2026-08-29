@@ -4,9 +4,12 @@ import * as React from "react"
 import { toast } from "sonner"
 
 import DashboardHeader from "@/components/dashboard/header"
+import AchievementsStrip from "@/components/dashboard/achievements-strip"
 import MetricTiles from "@/components/dashboard/metric-tiles"
+import BenchmarkStripCard from "@/components/dashboard/benchmark-strip-card"
 import EquityChart from "@/components/dashboard/equity-chart"
 import ConcentrationDonut from "@/components/dashboard/concentration-donut"
+import SectorAllocationCard from "@/components/dashboard/sector-allocation-card"
 import PositionsTable from "@/components/dashboard/positions-table"
 import SignalsCard from "@/components/dashboard/signals-card"
 import ValuationCard from "@/components/dashboard/valuation-card"
@@ -189,6 +192,8 @@ export default function OverviewPage() {
             <ErrorReport message={state.message} onRetry={load} />
           ) : (
             <>
+              <AchievementsStrip badges={state.rapport.badges} />
+
               <MetricTiles
                 currentValue={totals.currentValue}
                 totalPnlAbs={totals.pnlAbs}
@@ -196,6 +201,8 @@ export default function OverviewPage() {
                 deltas={state.rapport.deltas}
                 metriques={state.rapport.metriques}
               />
+
+              <BenchmarkStripCard comparaison={state.rapport.comparaison_benchmark} />
 
               <section className="grid grid-cols-1 gap-6 lg:grid-cols-12">
                 <div className="lg:col-span-8">
@@ -211,6 +218,11 @@ export default function OverviewPage() {
                   />
                 </div>
               </section>
+
+              <SectorAllocationCard
+                diversification={state.rapport.diversification}
+                totalPositions={state.rapport.lignes.length}
+              />
 
               <PositionsTable
                 lignes={state.rapport.lignes}

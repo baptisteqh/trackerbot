@@ -94,6 +94,84 @@ def serie_sma(valeurs: list[float], periode: int) -> list[float]:
     ]
 
 
+def roc(valeurs: list[float], periode: int) -> float | None:
+    """Rate of Change : variation en pourcentage sur `periode` seances.
+
+    Signal de momentum simple. Positif = tendance haussiere sur la fenetre.
+    """
+    if periode <= 0:
+        raise ValueError("periode doit etre strictement positive")
+    if len(valeurs) < periode + 1:
+        return None
+    reference = valeurs[-periode - 1]
+    if reference <= 0:
+        return None
+    return (valeurs[-1] - reference) / reference * 100.0
+
+
+def ema(valeurs: list[float], periode: int) -> list[float]:
+    """Moyenne mobile exponentielle. Serie complete, meme longueur que l'entree."""
+    if periode <= 0:
+        raise ValueError("periode doit etre strictement positive")
+    if not valeurs:
+        return []
+    alpha = 2.0 / (periode + 1)
+    resultat = [valeurs[0]]
+    for v in valeurs[1:]:
+        resultat.append(alpha * v + (1 - alpha) * resultat[-1])
+    return resultat
+
+
+def macd(
+    valeurs: list[float],
+    rapide: int = 12,
+    lente: int = 26,
+    signal: int = 9,
+) -> tuple[float, float, float] | None:
+    """MACD (12, 26, 9). Renvoie (ligne_macd, ligne_signal, histogramme).
+
+    Convention Appel : ligne_macd = EMA_rapide - EMA_lente, ligne_signal
+    = EMA(ligne_macd, signal), histogramme = ligne_macd - ligne_signal.
+    Positive-histogramme = momentum haussier.
+    """
+    if rapide >= lente:
+        raise ValueError("rapide doit etre < lente")
+    if len(valeurs) < lente + signal:
+        return None
+    ema_rapide = ema(valeurs, rapide)
+    ema_lente = ema(valeurs, lente)
+    ligne_macd = [
+        rapide_val - lente_val
+        for rapide_val, lente_val in zip(ema_rapide, ema_lente, strict=True)
+    ]
+    ligne_signal = ema(ligne_macd, signal)
+    hist = ligne_macd[-1] - ligne_signal[-1]
+    return ligne_macd[-1], ligne_signal[-1], hist
+
+
+def bollinger_bands(
+    valeurs: list[float],
+    periode: int = 20,
+    k: float = 2.0,
+) -> tuple[float, float, float] | None:
+    """Bandes de Bollinger : (basse, moyenne, haute) = SMA ± k * ecart-type.
+
+    Un prix au-dessus de la bande haute ou sous la bande basse est
+    considere comme "stretch" — proba de retour vers la moyenne accrue.
+    """
+    if periode <= 0:
+        raise ValueError("periode doit etre strictement positive")
+    if k <= 0:
+        raise ValueError("k doit etre strictement positif")
+    if len(valeurs) < periode:
+        return None
+    recents = valeurs[-periode:]
+    moyenne = sum(recents) / periode
+    variance = sum((v - moyenne) ** 2 for v in recents) / periode
+    ecart_type = variance**0.5
+    return moyenne - k * ecart_type, moyenne, moyenne + k * ecart_type
+
+
 def volatilite_pct(valeurs: list[float], fenetre: int = 20) -> float | None:
     """Ecart type des rendements journaliers sur la fenetre, en pourcentage."""
     if len(valeurs) < fenetre + 1:

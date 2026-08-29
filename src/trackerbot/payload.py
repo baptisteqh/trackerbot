@@ -15,6 +15,9 @@ from datetime import date, datetime
 from enum import Enum
 from typing import Any
 
+from .achievements import evaluer_badges
+from .benchmarks import comparer
+from .diversification import calculer_diversification
 from .fundamentals import Fondamentaux
 from .metrics import serie_equity_portefeuille
 from .models import Cotation, Position
@@ -30,11 +33,24 @@ def payload_pour_dashboard(
     deltas: Deltas,
 ) -> dict[str, Any]:
     """Construit le dict JSON attendu par le dashboard."""
+    equity_data = _equity_series_avec_benchmark(positions, cotations, cotation_benchmark)
+    diversification = calculer_diversification(rapport.lignes)
+    comparaison = None
+    if cotation_benchmark and equity_data["values"] and equity_data["benchmark"]:
+        comparaison = comparer(
+            equity_data["values"],
+            equity_data["benchmark"],
+            cotation_benchmark.ticker,
+            rapport.genere_le,
+        )
+    badges = evaluer_badges(rapport, diversification, comparaison)
+
     donnees: dict[str, Any] = _en_dict(rapport)
-    donnees["equity_series"] = _equity_series_avec_benchmark(
-        positions, cotations, cotation_benchmark
-    )
+    donnees["equity_series"] = equity_data
     donnees["deltas"] = _en_dict(deltas)
+    donnees["diversification"] = _en_dict(diversification)
+    donnees["comparaison_benchmark"] = _en_dict(comparaison) if comparaison else None
+    donnees["badges"] = _en_dict(badges)
     return donnees
 
 
