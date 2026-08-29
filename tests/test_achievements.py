@@ -27,6 +27,7 @@ def _rapport(
         signaux=[],
         metriques=metriques or MetriquesPortefeuille(
             sharpe=None,
+            sortino=None,
             max_drawdown_pct=None,
             volatilite_annuelle_pct=None,
             rendement_annuel_pct=None,
@@ -97,9 +98,9 @@ class TestBadges:
 
     def test_risk_manager_sharpe(self) -> None:
         m_ok = MetriquesPortefeuille(
-            sharpe=1.5, max_drawdown_pct=None, volatilite_annuelle_pct=None,
-            rendement_annuel_pct=None, hhi=None, plus_grosse_position_pct=None,
-            beta=None, benchmark=None,
+            sharpe=1.5, sortino=None, max_drawdown_pct=None,
+            volatilite_annuelle_pct=None, rendement_annuel_pct=None,
+            hhi=None, plus_grosse_position_pct=None, beta=None, benchmark=None,
         )
         badges = evaluer_badges(_rapport([_ligne()], metriques=m_ok))
         assert _find(badges, "risk_manager").unlocked is True
@@ -131,9 +132,9 @@ class TestBadges:
 
     def test_diversified_requiert_positions_et_hhi(self) -> None:
         m = MetriquesPortefeuille(
-            sharpe=None, max_drawdown_pct=None, volatilite_annuelle_pct=None,
-            rendement_annuel_pct=None, hhi=2000, plus_grosse_position_pct=None,
-            beta=None, benchmark=None,
+            sharpe=None, sortino=None, max_drawdown_pct=None,
+            volatilite_annuelle_pct=None, rendement_annuel_pct=None,
+            hhi=2000, plus_grosse_position_pct=None, beta=None, benchmark=None,
         )
         lignes = [_ligne(f"T{i}", 20.0) for i in range(5)]
         div = Diversification(positions_effectives=5.0)

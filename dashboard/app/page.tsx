@@ -9,9 +9,12 @@ import MetricTiles from "@/components/dashboard/metric-tiles"
 import BenchmarkStripCard from "@/components/dashboard/benchmark-strip-card"
 import EquityChart from "@/components/dashboard/equity-chart"
 import ConcentrationDonut from "@/components/dashboard/concentration-donut"
+import CurrencyExposureCard from "@/components/dashboard/currency-exposure-card"
+import RiskMetricsCard from "@/components/dashboard/risk-metrics-card"
 import SectorAllocationCard from "@/components/dashboard/sector-allocation-card"
 import PositionsTable from "@/components/dashboard/positions-table"
 import SignalsCard from "@/components/dashboard/signals-card"
+import TickerSheet from "@/components/dashboard/ticker-sheet"
 import ValuationCard from "@/components/dashboard/valuation-card"
 import MarketWatchCard from "@/components/dashboard/market-watch-card"
 
@@ -23,8 +26,9 @@ import {
   fetchRapport,
   refreshRapport,
 } from "@/lib/api"
+import { downloadCsv } from "@/lib/csv-export"
 import { DEMO_RAPPORT } from "@/lib/demo-rapport"
-import type { Rapport, RefreshScope } from "@/lib/types"
+import type { LignePortefeuille, Rapport, RefreshScope } from "@/lib/types"
 
 const API_BASE =
   process.env.NEXT_PUBLIC_TRACKERBOT_API ?? "http://127.0.0.1:8000"
@@ -137,6 +141,22 @@ export default function OverviewPage() {
   const rapport = state.kind === "ready" ? state.rapport : null
   const totals = React.useMemo(() => derivePortfolioTotals(rapport), [rapport])
 
+  const [selectedTicker, setSelectedTicker] = React.useState<string | null>(null)
+  const selectedLigne = React.useMemo<LignePortefeuille | null>(() => {
+    if (!rapport || !selectedTicker) return null
+    return rapport.lignes.find((l) => l.position.ticker === selectedTicker) ?? null
+  }, [rapport, selectedTicker])
+  const selectedSignals = React.useMemo(() => {
+    if (!rapport || !selectedTicker) return []
+    return rapport.signaux.filter((s) => s.ticker === selectedTicker)
+  }, [rapport, selectedTicker])
+
+  const onExportCsv = React.useCallback(() => {
+    if (!rapport) return
+    downloadCsv(rapport)
+    toast.success("Snapshot exported.")
+  }, [rapport])
+
   return (
     <div className="min-h-svh bg-background">
       <div className="mx-auto max-w-[1240px] px-6 py-8">
@@ -149,6 +169,7 @@ export default function OverviewPage() {
           onRefreshQuotes={onRefreshQuotes}
           onRegenerateVeille={onRegenerateVeille}
           onRefreshFundamentals={onRefreshFundamentals}
+          onExportCsv={rapport ? onExportCsv : undefined}
           reportSourceUrl={`${API_BASE}/rapport`}
         />
 
@@ -219,15 +240,31 @@ export default function OverviewPage() {
                 </div>
               </section>
 
-              <SectorAllocationCard
-                diversification={state.rapport.diversification}
-                totalPositions={state.rapport.lignes.length}
-              />
+              <section className="grid grid-cols-1 gap-6 lg:grid-cols-12">
+                <div className="lg:col-span-8">
+                  <SectorAllocationCard
+                    diversification={state.rapport.diversification}
+                    totalPositions={state.rapport.lignes.length}
+                  />
+                </div>
+                <div className="lg:col-span-4">
+                  <CurrencyExposureCard
+                    expositions={state.rapport.exposition_devises}
+                  />
+                </div>
+              </section>
+
+              <section className="grid grid-cols-1 gap-6 lg:grid-cols-12">
+                <div className="lg:col-span-8">
+                  <RiskMetricsCard metriques={state.rapport.metriques} />
+                </div>
+              </section>
 
               <PositionsTable
                 lignes={state.rapport.lignes}
                 signaux={state.rapport.signaux}
                 tickersManquants={state.rapport.tickers_manquants}
+                onRowSelect={(l) => setSelectedTicker(l.position.ticker)}
               />
 
               <section className="grid grid-cols-1 gap-6 lg:grid-cols-12">
@@ -249,6 +286,14 @@ export default function OverviewPage() {
                 {" · "}
                 {state.rapport.signaux.length} signals
               </footer>
+
+              <TickerSheet
+                ligne={selectedLigne}
+                signals={selectedSignals}
+                onOpenChange={(open) => {
+                  if (!open) setSelectedTicker(null)
+                }}
+              />
             </>
           )}
         </main>

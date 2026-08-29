@@ -3,6 +3,7 @@
 import * as React from "react"
 import { useTheme } from "next-themes"
 import {
+  DownloadIcon,
   MoonIcon,
   MoreHorizontalIcon,
   RefreshCwIcon,
@@ -29,6 +30,7 @@ interface DashboardHeaderProps {
   onRefreshQuotes: () => void
   onRegenerateVeille: () => void
   onRefreshFundamentals: () => void
+  onExportCsv?: () => void
   reportSourceUrl: string
 }
 
@@ -41,6 +43,7 @@ export default function DashboardHeader({
   onRefreshQuotes,
   onRegenerateVeille,
   onRefreshFundamentals,
+  onExportCsv,
   reportSourceUrl,
 }: DashboardHeaderProps) {
   return (
@@ -106,6 +109,15 @@ export default function DashboardHeader({
             >
               Refresh fundamentals
             </DropdownMenuItem>
+            {onExportCsv ? (
+              <>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={onExportCsv}>
+                  <DownloadIcon className="mr-2 size-3.5" />
+                  Export snapshot CSV
+                </DropdownMenuItem>
+              </>
+            ) : null}
             <DropdownMenuSeparator />
             <DropdownMenuItem
               render={

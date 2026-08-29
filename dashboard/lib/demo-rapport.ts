@@ -207,6 +207,7 @@ export const DEMO_RAPPORT: Rapport = {
   },
   metriques: {
     sharpe: 1.42,
+    sortino: 2.18,
     max_drawdown_pct: 8.6,
     volatilite_annuelle_pct: 17.4,
     rendement_annuel_pct: 24.8,
@@ -320,5 +321,10 @@ export const DEMO_RAPPORT: Rapport = {
       unlocked: false,
       detail: "MaxDD 8.6%",
     },
+  ],
+  exposition_devises: [
+    { devise: "USD", poids_pct: 68.4, valeur: 13680, nb_positions: 3 },
+    { devise: "EUR", poids_pct: 22.1, valeur: 4420,  nb_positions: 1 },
+    { devise: "GBP", poids_pct: 9.5,  valeur: 1900,  nb_positions: 1 },
   ],
 }

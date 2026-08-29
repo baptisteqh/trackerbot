@@ -68,7 +68,8 @@ export default function SignalsCard({ signaux }: SignalsCardProps) {
                     {items.map((s, i) => (
                       <div
                         key={`${level}-${i}`}
-                        className="flex items-start gap-3 rounded-md border border-border/40 bg-white/[0.015] p-3"
+                        className="tb-fade-up flex items-start gap-3 rounded-md border border-border/40 bg-white/[0.015] p-3 transition-colors hover:border-border/70 hover:bg-white/[0.03]"
+                        style={{ animationDelay: `${i * 40}ms` }}
                       >
                         <span
                           className={cn("mt-0.5 h-8 w-0.5 shrink-0 rounded", LEVEL_BAR[level])}

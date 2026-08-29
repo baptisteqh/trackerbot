@@ -53,6 +53,7 @@ export interface ScoreValorisation {
 
 export interface Metriques {
   sharpe: number | null
+  sortino: number | null
   max_drawdown_pct: number | null
   volatilite_annuelle_pct: number | null
   rendement_annuel_pct: number | null
@@ -60,6 +61,13 @@ export interface Metriques {
   plus_grosse_position_pct: number | null
   beta: number | null
   benchmark: string | null
+}
+
+export interface ExpositionDevise {
+  devise: string
+  poids_pct: number
+  valeur: number
+  nb_positions: number
 }
 
 export interface LignePortefeuille {
@@ -143,6 +151,7 @@ export interface Rapport {
   diversification: Diversification
   comparaison_benchmark: ComparaisonBenchmark | null
   badges: Badge[]
+  exposition_devises: ExpositionDevise[]
 }
 
 export type RefreshScope = "quotes" | "veille" | "fundamentals" | "all"
