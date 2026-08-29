@@ -7,6 +7,8 @@ from trackerbot.signals import (
     Seuils,
     evaluer,
     evaluer_portefeuille,
+    regle_bollinger,
+    regle_macd,
     regle_repli,
     regle_rsi,
     regle_stop_loss,
@@ -93,3 +95,46 @@ def test_evaluer_portefeuille_ignore_ticker_sans_cotation() -> None:
     cotations = {"AAPL": Cotation(ticker="AAPL", prix=100.0)}
     signaux = evaluer_portefeuille([p1, p2], cotations)
     assert all(s.ticker == "AAPL" for s in signaux)
+
+
+def test_macd_croisement_haussier() -> None:
+    # Longue baisse (histogramme MACD negatif) puis rebond franc :
+    # au 2eme point de rebond, l'histogramme bascule negatif -> positif.
+    clotures = [100 - i for i in range(50)] + [50 + i * 5 for i in range(2)]
+    position = _position(ticker="AAPL")
+    cotation = Cotation(ticker="AAPL", prix=clotures[-1], clotures=clotures)
+    signal = regle_macd(position, cotation, Seuils())
+    assert signal is not None
+    assert signal.regle == "macd_croisement_haussier"
+
+
+def test_macd_pas_de_signal_sans_historique() -> None:
+    position = _position()
+    cotation = Cotation(ticker="AAPL", prix=100.0, clotures=[100.0, 101.0])
+    assert regle_macd(position, cotation, Seuils()) is None
+
+
+def test_bollinger_prix_hors_bande_haute() -> None:
+    # 20 clotures autour de 100, puis un pic tres au-dessus.
+    clotures = [100.0 + (i % 3) * 0.1 for i in range(20)] + [130.0]
+    position = _position()
+    cotation = Cotation(ticker="AAPL", prix=130.0, clotures=clotures)
+    signal = regle_bollinger(position, cotation, Seuils())
+    assert signal is not None
+    assert signal.regle == "bollinger_haute"
+
+
+def test_bollinger_prix_hors_bande_basse() -> None:
+    clotures = [100.0 + (i % 3) * 0.1 for i in range(20)] + [70.0]
+    position = _position()
+    cotation = Cotation(ticker="AAPL", prix=70.0, clotures=clotures)
+    signal = regle_bollinger(position, cotation, Seuils())
+    assert signal is not None
+    assert signal.regle == "bollinger_basse"
+
+
+def test_bollinger_prix_dans_les_bandes() -> None:
+    clotures = [100.0 + (i % 3) * 0.5 for i in range(20)] + [100.5]
+    position = _position()
+    cotation = Cotation(ticker="AAPL", prix=100.5, clotures=clotures)
+    assert regle_bollinger(position, cotation, Seuils()) is None

@@ -200,4 +200,15 @@ class TestErreurs:
             headers = _refresh_headers(tc)
             response = tc.post("/refresh", json={"scope": "quotes"}, headers=headers)
             assert response.status_code == 500
-            assert "plus de portefeuille" in response.json()["detail"]
+            # L'exception est loguee server-side (voir logger `trackerbot.api`),
+            # le client recoit un message stable qui ne fuite pas d'interne.
+            detail = response.json()["detail"]
+            assert "erreur interne" in detail
+            assert "plus de portefeuille" not in detail
+
+    def test_security_headers_presents_sur_reponse(self, client: TestClient) -> None:
+        response = client.get("/health")
+        assert response.headers.get("X-Content-Type-Options") == "nosniff"
+        assert response.headers.get("X-Frame-Options") == "DENY"
+        assert response.headers.get("Referrer-Policy") == "no-referrer"
+        assert "geolocation=()" in response.headers.get("Permissions-Policy", "")

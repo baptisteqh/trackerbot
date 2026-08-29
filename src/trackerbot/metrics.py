@@ -23,6 +23,7 @@ class MetriquesPortefeuille:
     """Ce qu'un tableau de bord type Delta afficherait en tete de page."""
 
     sharpe: float | None
+    sortino: float | None
     max_drawdown_pct: float | None
     volatilite_annuelle_pct: float | None
     rendement_annuel_pct: float | None
@@ -89,6 +90,28 @@ def sharpe_annualise(
         return None
     exces_journalier = moyenne - taux_sans_risque_annuel / JOURS_BOURSE
     return exces_journalier / math.sqrt(variance) * math.sqrt(JOURS_BOURSE)
+
+
+def sortino_annualise(
+    rendements: list[float],
+    taux_sans_risque_annuel: float = 0.04,
+) -> float | None:
+    """Ratio de Sortino annualise : Sharpe qui ne penalise que la volatilite baissiere.
+
+    On calcule l'ecart-type des rendements strictement negatifs (downside
+    deviation), pas de la volatilite totale. Renvoie None si moins de 2
+    rendements ou aucun rendement baissier (rien a penaliser).
+    """
+    if len(rendements) < 2:
+        return None
+    exces_moyen = sum(rendements) / len(rendements) - taux_sans_risque_annuel / JOURS_BOURSE
+    baisses = [r for r in rendements if r < 0]
+    if len(baisses) < 2:
+        return None
+    variance_baisse = sum(b * b for b in baisses) / len(baisses)
+    if variance_baisse == 0:
+        return None
+    return exces_moyen / math.sqrt(variance_baisse) * math.sqrt(JOURS_BOURSE)
 
 
 def max_drawdown_pct(serie: list[float]) -> float | None:
@@ -168,6 +191,7 @@ def calculer_metriques(
 
     return MetriquesPortefeuille(
         sharpe=sharpe_annualise(rendements, taux_sans_risque_annuel),
+        sortino=sortino_annualise(rendements, taux_sans_risque_annuel),
         max_drawdown_pct=max_drawdown_pct(equity),
         volatilite_annuelle_pct=volatilite_annuelle_pct(rendements),
         rendement_annuel_pct=rendement_annuel_pct(rendements),

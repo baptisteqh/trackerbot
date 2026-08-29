@@ -17,6 +17,7 @@ from typing import Any
 
 from .achievements import evaluer_badges
 from .benchmarks import comparer
+from .currency import exposition_par_devise
 from .diversification import calculer_diversification
 from .fundamentals import Fondamentaux
 from .metrics import serie_equity_portefeuille
@@ -51,6 +52,7 @@ def payload_pour_dashboard(
     donnees["diversification"] = _en_dict(diversification)
     donnees["comparaison_benchmark"] = _en_dict(comparaison) if comparaison else None
     donnees["badges"] = _en_dict(badges)
+    donnees["exposition_devises"] = _en_dict(exposition_par_devise(rapport.lignes))
     return donnees
 
 

@@ -20,6 +20,7 @@ from trackerbot.metrics import (
     rendements_journaliers,
     serie_equity_portefeuille,
     sharpe_annualise,
+    sortino_annualise,
     volatilite_annuelle_pct,
 )
 from trackerbot.models import Cotation, Position
@@ -49,6 +50,30 @@ class TestSharpe:
         s = sharpe_annualise(base, taux_sans_risque_annuel=0.0)
         assert s is not None
         assert s > 0
+
+
+class TestSortino:
+    def test_serie_trop_courte(self) -> None:
+        assert sortino_annualise([0.01]) is None
+
+    def test_aucune_baisse_donne_none(self) -> None:
+        # Sortino n'est pas defini quand rien ne baisse : rien a penaliser.
+        assert sortino_annualise([0.01, 0.02, 0.03]) is None
+
+    def test_valeur_positive_quand_moyenne_positive(self) -> None:
+        rendements = [0.02, -0.005, 0.03, -0.01, 0.025]
+        val = sortino_annualise(rendements, taux_sans_risque_annuel=0.0)
+        assert val is not None
+        assert val > 0
+
+    def test_sortino_superieur_a_sharpe_quand_downside_moderee(self) -> None:
+        # Serie avec quelques baisses mais forte volatilite globale :
+        # Sortino > Sharpe car il ne compte pas les hausses comme "risque".
+        rendements = [0.05, -0.01, 0.04, -0.005, 0.06, -0.008, 0.03]
+        sh = sharpe_annualise(rendements, taux_sans_risque_annuel=0.0)
+        so = sortino_annualise(rendements, taux_sans_risque_annuel=0.0)
+        assert sh is not None and so is not None
+        assert so > sh
 
 
 class TestMaxDrawdown:

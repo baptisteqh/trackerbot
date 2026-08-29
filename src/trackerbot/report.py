@@ -208,6 +208,7 @@ def _formater_metriques(m: MetriquesPortefeuille) -> list[str]:
     """Rendu compact ; on n'affiche que ce qui est mesurable."""
     risque = _joindre(
         _optionnel("Sharpe", m.sharpe, "{:.2f}"),
+        _optionnel("Sortino", m.sortino, "{:.2f}"),
         _optionnel("Vol", m.volatilite_annuelle_pct, "{:.1f}%"),
         _optionnel("Rdmt", m.rendement_annuel_pct, "{:+.1f}%"),
         _optionnel("MaxDD", m.max_drawdown_pct, "{:.1f}%"),

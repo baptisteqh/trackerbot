@@ -29,6 +29,7 @@ test_api.py.
 
 from __future__ import annotations
 
+import logging
 import secrets
 import time
 from collections import deque
@@ -39,6 +40,10 @@ from fastapi import FastAPI, Header, HTTPException, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.types import ASGIApp
+
+logger = logging.getLogger("trackerbot.api")
 
 from .config import ROOT, charger_config
 from .fundamentals import Fondamentaux
@@ -103,9 +108,29 @@ class DemandeRefresh(BaseModel):
     scope: str = "quotes"
 
 
+class SecurityHeadersMiddleware(BaseHTTPMiddleware):
+    """Ajoute quelques en-tetes defensifs sur toutes les reponses.
+
+    Meme si l'API n'est jamais exposee au web, ces headers empechent
+    par exemple qu'un navigateur essaie de deviner le type MIME (XSS via
+    fichier trompeur), ou d'embarquer les reponses dans une iframe.
+    """
+
+    async def dispatch(self, request: Request, call_next: Callable) -> Response:
+        response = await call_next(request)
+        response.headers.setdefault("X-Content-Type-Options", "nosniff")
+        response.headers.setdefault("X-Frame-Options", "DENY")
+        response.headers.setdefault("Referrer-Policy", "no-referrer")
+        response.headers.setdefault(
+            "Permissions-Policy", "geolocation=(), camera=(), microphone=()"
+        )
+        return response
+
+
 def create_app() -> FastAPI:
     """Construit l'app FastAPI. Fonction plutot que module-level pour tests propres."""
     app = FastAPI(title="trackerbot", version="0.1.0", docs_url=None, redoc_url=None)
+    app.add_middleware(SecurityHeadersMiddleware)
     app.add_middleware(
         CORSMiddleware,
         allow_origins=list(ORIGINES_AUTORISEES),
@@ -162,9 +187,11 @@ def create_app() -> FastAPI:
 
         try:
             positions = positions_loader()
-        except Exception as erreur:  # noqa: BLE001 - on renvoie l'erreur au client
+        except Exception as erreur:  # noqa: BLE001 - loguer et renvoyer un message stable
+            logger.exception("echec lecture portefeuille pendant /refresh")
             raise HTTPException(
-                status_code=500, detail=f"lecture portefeuille : {erreur}"
+                status_code=500,
+                detail="erreur interne lors de la lecture du portefeuille (voir logs serveur)",
             ) from erreur
 
         payload = _calculer_rapport(positions, demande.scope)
@@ -197,14 +224,16 @@ def _exiger_rate_limit_libre(
     scope: str, horodatages: dict[str, deque[float]]
 ) -> None:
     if scope not in SCOPES_VALIDES:
-        raise HTTPException(status_code=422, detail=f"scope inconnu : {scope!r}")
+        # On ne reflechit pas la valeur utilisateur dans le message : evite
+        # d'aider a l'enumeration et supprime tout risque de reflection.
+        raise HTTPException(status_code=422, detail="scope inconnu")
     limite, fenetre = LIMITES_RATE[scope]
     maintenant = time.monotonic()
     file = horodatages[scope]
     while file and maintenant - file[0] > fenetre:
         file.popleft()
     if len(file) >= limite:
-        raise HTTPException(status_code=429, detail=f"trop d'appels {scope}")
+        raise HTTPException(status_code=429, detail="rate limit atteint")
     file.append(maintenant)
 
 

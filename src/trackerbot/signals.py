@@ -14,7 +14,9 @@ from collections.abc import Callable
 from dataclasses import dataclass
 
 from .indicators import (
+    bollinger_bands,
     croisement,
+    macd,
     repli_depuis_plus_haut_pct,
     rsi,
     serie_sma,
@@ -38,6 +40,13 @@ class Seuils:
     variation_jour_pct: float = 5.0
     gain_notable_pct: float = 25.0
     perte_notable_pct: float = 15.0
+    # MACD (12/26/9) : histogramme au-dela de ce ratio absolu vs prix declenche.
+    macd_rapide: int = 12
+    macd_lente: int = 26
+    macd_signal: int = 9
+    # Bollinger (20, 2σ) : marge en % du prix a franchir pour signaler.
+    bollinger_periode: int = 20
+    bollinger_k: float = 2.0
 
 
 Regle = Callable[[Position, Cotation, Seuils], Signal | None]
@@ -169,6 +178,69 @@ def regle_variation_jour(
     )
 
 
+def regle_macd(position: Position, cotation: Cotation, seuils: Seuils) -> Signal | None:
+    """Croisement de la ligne MACD avec sa ligne signal.
+
+    On calcule le MACD sur les deux dernieres seances et on regarde si
+    l'histogramme change de signe : c'est un croisement, meme definition
+    que pour deux moyennes qui se croisent.
+    """
+    clotures = cotation.clotures
+    besoin = seuils.macd_lente + seuils.macd_signal + 1
+    if len(clotures) < besoin:
+        return None
+    aujourd_hui = macd(clotures, seuils.macd_rapide, seuils.macd_lente, seuils.macd_signal)
+    hier = macd(clotures[:-1], seuils.macd_rapide, seuils.macd_lente, seuils.macd_signal)
+    if aujourd_hui is None or hier is None:
+        return None
+    hist_hier, hist_maintenant = hier[2], aujourd_hui[2]
+    if hist_hier <= 0 < hist_maintenant:
+        return Signal(
+            ticker=position.ticker,
+            niveau=Niveau.ATTENTION,
+            regle="macd_croisement_haussier",
+            message="MACD passe au-dessus de sa ligne signal (momentum haussier)",
+        )
+    if hist_hier >= 0 > hist_maintenant:
+        return Signal(
+            ticker=position.ticker,
+            niveau=Niveau.ATTENTION,
+            regle="macd_croisement_baissier",
+            message="MACD passe sous sa ligne signal (momentum baissier)",
+        )
+    return None
+
+
+def regle_bollinger(position: Position, cotation: Cotation, seuils: Seuils) -> Signal | None:
+    """Prix hors bandes de Bollinger : conditions extremes de volatilite."""
+    bandes = bollinger_bands(cotation.clotures, seuils.bollinger_periode, seuils.bollinger_k)
+    if bandes is None:
+        return None
+    basse, moyenne, haute = bandes
+    prix = cotation.prix
+    if prix >= haute:
+        ecart = (prix - moyenne) / moyenne * 100.0 if moyenne else 0.0
+        return Signal(
+            ticker=position.ticker,
+            niveau=Niveau.INFO,
+            regle="bollinger_haute",
+            message=(
+                f"prix au-dessus de la bande haute ({haute:.2f}, +{ecart:.1f} % vs moyenne)"
+            ),
+        )
+    if prix <= basse:
+        ecart = (moyenne - prix) / moyenne * 100.0 if moyenne else 0.0
+        return Signal(
+            ticker=position.ticker,
+            niveau=Niveau.INFO,
+            regle="bollinger_basse",
+            message=(
+                f"prix sous la bande basse ({basse:.2f}, -{ecart:.1f} % vs moyenne)"
+            ),
+        )
+    return None
+
+
 def regle_performance(position: Position, cotation: Cotation, seuils: Seuils) -> Signal | None:
     """Gain ou perte latente sortant de l'ordinaire."""
     gain = position.gain_pct(cotation.prix)
@@ -195,6 +267,8 @@ REGLES: tuple[Regle, ...] = (
     regle_repli,
     regle_variation_jour,
     regle_croisement_moyennes,
+    regle_macd,
+    regle_bollinger,
     regle_rsi,
     regle_performance,
 )

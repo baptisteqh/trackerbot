@@ -47,12 +47,14 @@ interface PositionsTableProps {
   lignes: LignePortefeuille[]
   signaux: Signal[]
   tickersManquants: string[]
+  onRowSelect?: (ligne: LignePortefeuille) => void
 }
 
 export default function PositionsTable({
   lignes,
   signaux,
   tickersManquants,
+  onRowSelect,
 }: PositionsTableProps) {
   const [sort, setSort] = React.useState<{ key: SortKey; asc: boolean }>({
     key: "poids_pct",
@@ -174,6 +176,7 @@ export default function PositionsTable({
                   ligne={ligne}
                   signals={signalsByTicker.get(ligne.position.ticker) ?? []}
                   isMissing={missingSet.has(ligne.position.ticker)}
+                  onSelect={onRowSelect}
                 />
               ))}
             </TableBody>
@@ -188,9 +191,10 @@ interface PositionRowProps {
   ligne: LignePortefeuille
   signals: Signal[]
   isMissing: boolean
+  onSelect?: (ligne: LignePortefeuille) => void
 }
 
-function PositionRow({ ligne, signals, isMissing }: PositionRowProps) {
+function PositionRow({ ligne, signals, isMissing, onSelect }: PositionRowProps) {
   const { position, cotation } = ligne
   const sparkData = React.useMemo(() => {
     if (!cotation) return []
@@ -217,8 +221,29 @@ function PositionRow({ ligne, signals, isMissing }: PositionRowProps) {
 
   const smaGlyph = renderSmaGlyph(cotation?.prix ?? null, ligne.sma_20)
 
+  const clickable = onSelect !== undefined
+  const handleClick = clickable ? () => onSelect(ligne) : undefined
+  const handleKey = clickable
+    ? (e: React.KeyboardEvent<HTMLTableRowElement>) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault()
+          onSelect(ligne)
+        }
+      }
+    : undefined
+
   return (
-    <TableRow className="group border-b border-border/40 transition-colors hover:bg-white/[0.02]">
+    <TableRow
+      className={cn(
+        "group border-b border-border/40 transition-colors hover:bg-white/[0.02]",
+        clickable && "cursor-pointer focus:bg-white/[0.03] focus:outline-none",
+      )}
+      onClick={handleClick}
+      onKeyDown={handleKey}
+      tabIndex={clickable ? 0 : undefined}
+      role={clickable ? "button" : undefined}
+      aria-label={clickable ? `Open details for ${ligne.position.ticker}` : undefined}
+    >
       <TableCell className="py-4">
         <div className="flex items-center gap-3">
           <span
@@ -309,7 +334,7 @@ function PositionRow({ ligne, signals, isMissing }: PositionRowProps) {
       <TableCell className="text-right font-mono text-sm tabular-nums text-muted-foreground">
         {formatPercent(ligne.volatilite_20j_pct)}
       </TableCell>
-      <TableCell className="text-center">
+      <TableCell className="text-center" onClick={(e) => e.stopPropagation()}>
         {signals.length > 0 ? (
           <Tooltip>
             <TooltipTrigger
