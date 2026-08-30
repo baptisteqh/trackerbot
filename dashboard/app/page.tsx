@@ -14,6 +14,7 @@ import RiskMetricsCard from "@/components/dashboard/risk-metrics-card"
 import SectorAllocationCard from "@/components/dashboard/sector-allocation-card"
 import PositionsTable from "@/components/dashboard/positions-table"
 import SignalsCard from "@/components/dashboard/signals-card"
+import StrategySuggestionsCard from "@/components/dashboard/strategy-suggestions-card"
 import TickerSheet from "@/components/dashboard/ticker-sheet"
 import ValuationCard from "@/components/dashboard/valuation-card"
 import MarketWatchCard from "@/components/dashboard/market-watch-card"
@@ -28,6 +29,7 @@ import {
 } from "@/lib/api"
 import { downloadCsv } from "@/lib/csv-export"
 import { DEMO_RAPPORT } from "@/lib/demo-rapport"
+import { analyserStrategie } from "@/lib/strategy"
 import type { LignePortefeuille, Rapport, RefreshScope } from "@/lib/types"
 
 const API_BASE =
@@ -157,6 +159,11 @@ export default function OverviewPage() {
     toast.success("Snapshot exported.")
   }, [rapport])
 
+  const strategySuggestions = React.useMemo(
+    () => (rapport ? analyserStrategie(rapport) : []),
+    [rapport],
+  )
+
   return (
     <div className="min-h-svh bg-background">
       <div className="mx-auto max-w-[1240px] px-6 py-8">
@@ -257,6 +264,9 @@ export default function OverviewPage() {
               <section className="grid grid-cols-1 gap-6 lg:grid-cols-12">
                 <div className="lg:col-span-8">
                   <RiskMetricsCard metriques={state.rapport.metriques} />
+                </div>
+                <div className="lg:col-span-4">
+                  <StrategySuggestionsCard suggestions={strategySuggestions} />
                 </div>
               </section>
 

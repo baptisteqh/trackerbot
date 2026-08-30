@@ -13,6 +13,31 @@ from trackerbot.models import Cotation, Position
 from trackerbot.report import LignePortefeuille, Rapport
 
 
+def _metriques_vides(**overrides: object) -> MetriquesPortefeuille:
+    """Fabrique un MetriquesPortefeuille avec tous les champs None + overrides.
+
+    Isole les tests de l'evolution du dataclass : quand on ajoute un
+    nouveau champ, seul ce helper est a mettre a jour.
+    """
+    valeurs: dict[str, object] = {
+        "sharpe": None,
+        "sortino": None,
+        "calmar": None,
+        "max_drawdown_pct": None,
+        "volatilite_annuelle_pct": None,
+        "rendement_annuel_pct": None,
+        "var_95_pct": None,
+        "hhi": None,
+        "plus_grosse_position_pct": None,
+        "beta": None,
+        "alpha_annuel_pct": None,
+        "information_ratio": None,
+        "benchmark": None,
+    }
+    valeurs.update(overrides)
+    return MetriquesPortefeuille(**valeurs)  # type: ignore[arg-type]
+
+
 def _rapport(
     lignes: list[LignePortefeuille] | None = None,
     gain_absolu: float = 0.0,
@@ -25,17 +50,7 @@ def _rapport(
         genere_le=date(2026, 8, 30),
         lignes=lignes,
         signaux=[],
-        metriques=metriques or MetriquesPortefeuille(
-            sharpe=None,
-            sortino=None,
-            max_drawdown_pct=None,
-            volatilite_annuelle_pct=None,
-            rendement_annuel_pct=None,
-            hhi=None,
-            plus_grosse_position_pct=None,
-            beta=None,
-            benchmark=None,
-        ),
+        metriques=metriques or _metriques_vides(),
     )
 
 
@@ -97,11 +112,7 @@ class TestBadges:
         assert _find(badges_sous, "double_digit_gainer").unlocked is False
 
     def test_risk_manager_sharpe(self) -> None:
-        m_ok = MetriquesPortefeuille(
-            sharpe=1.5, sortino=None, max_drawdown_pct=None,
-            volatilite_annuelle_pct=None, rendement_annuel_pct=None,
-            hhi=None, plus_grosse_position_pct=None, beta=None, benchmark=None,
-        )
+        m_ok = _metriques_vides(sharpe=1.5)
         badges = evaluer_badges(_rapport([_ligne()], metriques=m_ok))
         assert _find(badges, "risk_manager").unlocked is True
 
@@ -131,11 +142,7 @@ class TestBadges:
         assert _find(badges, "momentum_ready").unlocked is True
 
     def test_diversified_requiert_positions_et_hhi(self) -> None:
-        m = MetriquesPortefeuille(
-            sharpe=None, sortino=None, max_drawdown_pct=None,
-            volatilite_annuelle_pct=None, rendement_annuel_pct=None,
-            hhi=2000, plus_grosse_position_pct=None, beta=None, benchmark=None,
-        )
+        m = _metriques_vides(hhi=2000)
         lignes = [_ligne(f"T{i}", 20.0) for i in range(5)]
         div = Diversification(positions_effectives=5.0)
         badges = evaluer_badges(_rapport(lignes, metriques=m), diversification=div)

@@ -12,15 +12,19 @@ import pytest
 
 from trackerbot.metrics import (
     JOURS_BOURSE,
+    alpha_jensen_annuel_pct,
     beta_vs_benchmark,
     calculer_metriques,
+    calmar_ratio,
     hhi,
+    information_ratio,
     max_drawdown_pct,
     rendement_annuel_pct,
     rendements_journaliers,
     serie_equity_portefeuille,
     sharpe_annualise,
     sortino_annualise,
+    value_at_risk_historique_pct,
     volatilite_annuelle_pct,
 )
 from trackerbot.models import Cotation, Position
@@ -103,6 +107,81 @@ class TestVolatiliteEtRendementAnnuels:
 
     def test_rendement_serie_vide(self) -> None:
         assert rendement_annuel_pct([]) is None
+
+
+class TestCalmar:
+    def test_none_si_mdd_inconnu(self) -> None:
+        assert calmar_ratio(15.0, None) is None
+        assert calmar_ratio(None, 5.0) is None
+
+    def test_none_si_mdd_nul(self) -> None:
+        assert calmar_ratio(15.0, 0.0) is None
+
+    def test_ratio_correct(self) -> None:
+        # 20 % de rendement pour 10 % de MDD -> Calmar 2.0
+        assert calmar_ratio(20.0, 10.0) == pytest.approx(2.0)
+
+    def test_ratio_negatif_possible(self) -> None:
+        # Perte annuelle avec drawdown : Calmar negatif
+        assert calmar_ratio(-5.0, 10.0) == pytest.approx(-0.5)
+
+
+class TestValueAtRisk:
+    def test_none_si_serie_courte(self) -> None:
+        assert value_at_risk_historique_pct([0.01] * 19) is None
+
+    def test_var_95_sur_20_rendements(self) -> None:
+        # 20 rendements : (1 - 0.95) * 20 = 1 -> indice 1 dans la serie triee.
+        # Serie triee : [-0.05, -0.04, ..., 0.14]. Le quantile a l'indice 1 est -0.04.
+        # VaR 95 = |-0.04| * 100 = 4.
+        rendements = [(i - 5) / 100.0 for i in range(20)]  # -0.05 ... 0.14
+        var = value_at_risk_historique_pct(rendements, 0.95)
+        assert var == pytest.approx(4.0)
+
+    def test_var_zero_si_aucune_perte(self) -> None:
+        rendements = [0.01] * 30
+        assert value_at_risk_historique_pct(rendements, 0.95) == 0.0
+
+    def test_confiance_invalide(self) -> None:
+        with pytest.raises(ValueError):
+            value_at_risk_historique_pct([0.01] * 30, 1.5)
+
+
+class TestAlphaJensen:
+    def test_none_si_beta_inconnu(self) -> None:
+        assert alpha_jensen_annuel_pct([0.01, 0.02], [0.01, 0.02], None) is None
+
+    def test_alpha_nul_si_portefeuille_egale_benchmark(self) -> None:
+        # Meme serie, beta = 1 => alpha = 0
+        r = [0.01, 0.02, -0.01, 0.03, -0.005]
+        alpha = alpha_jensen_annuel_pct(r, r, 1.0, taux_sans_risque_annuel=0.0)
+        assert alpha == pytest.approx(0.0, abs=1e-9)
+
+    def test_alpha_positif_si_surperformance(self) -> None:
+        # Portefeuille bat le benchmark avec un beta faible
+        rp = [0.02, 0.02, 0.02, 0.02, 0.02]
+        rb = [0.01, 0.01, 0.01, 0.01, 0.01]
+        alpha = alpha_jensen_annuel_pct(rp, rb, beta=0.5, taux_sans_risque_annuel=0.0)
+        assert alpha is not None
+        assert alpha > 0
+
+
+class TestInformationRatio:
+    def test_none_si_serie_courte(self) -> None:
+        assert information_ratio([0.01], [0.01]) is None
+
+    def test_none_si_tracking_error_nul(self) -> None:
+        # Ecart constant -> variance = 0 -> IR indefini
+        rp = [0.02, 0.02, 0.02]
+        rb = [0.01, 0.01, 0.01]
+        assert information_ratio(rp, rb) is None
+
+    def test_ir_positif_quand_surperformance_reguliere(self) -> None:
+        rp = [0.02, 0.03, 0.01, 0.025, 0.015]
+        rb = [0.01, 0.02, 0.005, 0.02, 0.01]
+        ir = information_ratio(rp, rb)
+        assert ir is not None
+        assert ir > 0
 
 
 class TestHhi:

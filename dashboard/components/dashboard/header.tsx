@@ -145,15 +145,23 @@ function DarkToggle() {
   // eslint-disable-next-line react-hooks/set-state-in-effect
   React.useEffect(() => setMounted(true), [])
 
-  const isDark = resolvedTheme === "dark"
+  // Tant que `mounted` est faux, on ne connait pas le theme resolu cote client :
+  // on affiche un fallback stable (Moon + label neutre) pour matcher exactement
+  // le HTML SSR, sinon React se plaint d'un hydration mismatch sur `aria-label`.
+  const isDark = mounted && resolvedTheme === "dark"
+  const label = !mounted
+    ? "Toggle theme"
+    : isDark
+      ? "Switch to light mode"
+      : "Switch to dark mode"
   return (
     <Button
       variant="ghost"
       size="icon-sm"
-      aria-label={isDark ? "Switch to light mode" : "Switch to dark mode"}
+      aria-label={label}
       onClick={() => setTheme(isDark ? "light" : "dark")}
     >
-      {mounted && isDark ? <SunIcon /> : <MoonIcon />}
+      {isDark ? <SunIcon /> : <MoonIcon />}
     </Button>
   )
 }

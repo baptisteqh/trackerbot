@@ -46,6 +46,14 @@ export default function RiskMetricsCard({ metriques }: RiskMetricsCardProps) {
         "Same as Sharpe but only penalizes downside volatility. Usually higher than Sharpe.",
     },
     {
+      label: "Calmar",
+      value: metriques.calmar,
+      format: (n) => n.toFixed(2),
+      color: ratioColor(metriques.calmar),
+      tooltip:
+        "Annual return divided by Max Drawdown. Reward relative to worst historical pain.",
+    },
+    {
       label: "Max Drawdown",
       value: metriques.max_drawdown_pct,
       format: (n) => `${n.toFixed(1)}%`,
@@ -59,6 +67,31 @@ export default function RiskMetricsCard({ metriques }: RiskMetricsCardProps) {
       color: "text-foreground/80",
       tooltip: "Annualized standard deviation of daily returns.",
     },
+    {
+      label: "VaR 95%",
+      value: metriques.var_95_pct,
+      format: (n) => `${n.toFixed(1)}%`,
+      color: drawdownColor(metriques.var_95_pct !== null ? metriques.var_95_pct * 3 : null),
+      tooltip:
+        "Historical Value-at-Risk: 5% of past sessions saw a loss worse than this in a single day.",
+    },
+    {
+      label: "Alpha",
+      value: metriques.alpha_annuel_pct,
+      format: (n) => `${n > 0 ? "+" : ""}${n.toFixed(1)}%`,
+      color: alphaColor(metriques.alpha_annuel_pct),
+      tooltip: metriques.benchmark
+        ? `Jensen's alpha vs ${metriques.benchmark} (annualized). Value above what pure beta explains.`
+        : "Jensen's alpha vs benchmark (annualized). Value above what pure beta explains.",
+    },
+    {
+      label: "Info ratio",
+      value: metriques.information_ratio,
+      format: (n) => n.toFixed(2),
+      color: ratioColor(metriques.information_ratio),
+      tooltip:
+        "Consistency of active outperformance vs benchmark. Above 0.5 is solid, above 1 is exceptional.",
+    },
   ]
 
   return (
@@ -70,7 +103,7 @@ export default function RiskMetricsCard({ metriques }: RiskMetricsCardProps) {
         <span className="text-xs text-muted-foreground">Annualized · 252d</span>
       </CardHeader>
       <CardContent className="p-5">
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
           {items.map((item, i) => (
             <Tooltip key={item.label}>
               <TooltipTrigger
@@ -117,4 +150,11 @@ function drawdownColor(value: number | null): string {
   if (value >= 20) return "text-[var(--pnl-negative)]"
   if (value >= 10) return "text-[var(--chart-3)]"
   return "text-[var(--pnl-positive)]"
+}
+
+function alphaColor(value: number | null): string {
+  if (value === null) return "text-muted-foreground"
+  if (value > 0) return "text-[var(--pnl-positive)]"
+  if (value < 0) return "text-[var(--pnl-negative)]"
+  return "text-foreground/70"
 }

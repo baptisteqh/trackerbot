@@ -54,12 +54,16 @@ export interface ScoreValorisation {
 export interface Metriques {
   sharpe: number | null
   sortino: number | null
+  calmar: number | null
   max_drawdown_pct: number | null
   volatilite_annuelle_pct: number | null
   rendement_annuel_pct: number | null
+  var_95_pct: number | null
   hhi: number | null
   plus_grosse_position_pct: number | null
   beta: number | null
+  alpha_annuel_pct: number | null
+  information_ratio: number | null
   benchmark: string | null
 }
 

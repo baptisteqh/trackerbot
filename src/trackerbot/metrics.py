@@ -24,12 +24,16 @@ class MetriquesPortefeuille:
 
     sharpe: float | None
     sortino: float | None
+    calmar: float | None
     max_drawdown_pct: float | None
     volatilite_annuelle_pct: float | None
     rendement_annuel_pct: float | None
+    var_95_pct: float | None
     hhi: float | None
     plus_grosse_position_pct: float | None
     beta: float | None
+    alpha_annuel_pct: float | None
+    information_ratio: float | None
     benchmark: str | None
 
 
@@ -148,6 +152,94 @@ def rendement_annuel_pct(rendements: list[float]) -> float | None:
     return sum(rendements) / len(rendements) * JOURS_BOURSE * 100.0
 
 
+def calmar_ratio(
+    rendement_annuel_pct_valeur: float | None,
+    max_dd_pct_valeur: float | None,
+) -> float | None:
+    """Calmar = rendement annuel / |Max Drawdown|. None si MDD nul ou inconnu.
+
+    Standard hedge fund pour comparer perf a douleur maximale subie.
+    Attention : les deux entrees sont deja en % (echelle 0-100).
+    """
+    if rendement_annuel_pct_valeur is None or max_dd_pct_valeur is None:
+        return None
+    if max_dd_pct_valeur <= 0:
+        return None
+    return rendement_annuel_pct_valeur / max_dd_pct_valeur
+
+
+def value_at_risk_historique_pct(
+    rendements: list[float],
+    confiance: float = 0.95,
+) -> float | None:
+    """VaR historique en pourcentage positif de perte 1 jour au niveau donne.
+
+    Approche empirique : on prend le quantile (1 - confiance) des rendements
+    (typiquement 5 %eme percentile pour VaR 95). C'est la perte que 5 % des
+    seances historiques ont depassee. Renvoie None si moins de 20 rendements
+    (trop peu pour un quantile empirique fiable), ou si la queue est
+    positive (aucune perte historique = VaR 0 par convention).
+    """
+    if not 0 < confiance < 1:
+        raise ValueError("confiance doit etre dans (0, 1)")
+    if len(rendements) < 20:
+        return None
+    tries = sorted(rendements)
+    # Quantile inferieur : indice = floor((1 - confiance) * n).
+    indice = int((1 - confiance) * len(tries))
+    quantile = tries[indice]
+    return abs(quantile) * 100.0 if quantile < 0 else 0.0
+
+
+def alpha_jensen_annuel_pct(
+    rendements_portefeuille: list[float],
+    rendements_benchmark: list[float],
+    beta: float | None,
+    taux_sans_risque_annuel: float = 0.04,
+) -> float | None:
+    """Alpha de Jensen annualise, en %. None si beta inconnu ou serie trop courte.
+
+    alpha_journalier = mean(rp) - (rf_jour + beta * (mean(rb) - rf_jour))
+    Annualise par x 252 * 100. Positif = valeur ajoutee au-dela du pur beta.
+    """
+    if beta is None:
+        return None
+    taille = min(len(rendements_portefeuille), len(rendements_benchmark))
+    if taille < 2:
+        return None
+    rp = rendements_portefeuille[-taille:]
+    rb = rendements_benchmark[-taille:]
+    rf_jour = taux_sans_risque_annuel / JOURS_BOURSE
+    exces_port = sum(rp) / taille - rf_jour
+    exces_bench = sum(rb) / taille - rf_jour
+    alpha_jour = exces_port - beta * exces_bench
+    return alpha_jour * JOURS_BOURSE * 100.0
+
+
+def information_ratio(
+    rendements_portefeuille: list[float],
+    rendements_benchmark: list[float],
+) -> float | None:
+    """IR annualise = moyenne(rp - rb) / ecart-type(rp - rb) * sqrt(252).
+
+    Mesure la constance de l'ecart de performance vs benchmark.
+    None si serie trop courte ou tracking error nul.
+    """
+    taille = min(len(rendements_portefeuille), len(rendements_benchmark))
+    if taille < 2:
+        return None
+    rp = rendements_portefeuille[-taille:]
+    rb = rendements_benchmark[-taille:]
+    exces = [p - b for p, b in zip(rp, rb, strict=True)]
+    stats = _moyenne_variance(exces)
+    if stats is None:
+        return None
+    moyenne, variance = stats
+    if variance == 0:
+        return None
+    return moyenne / math.sqrt(variance) * math.sqrt(JOURS_BOURSE)
+
+
 def hhi(poids_pct: list[float]) -> float | None:
     """Herfindahl-Hirschman sur des poids en % (echelle 0 a 10 000)."""
     return sum(p * p for p in poids_pct) if poids_pct else None
@@ -185,18 +277,30 @@ def calculer_metriques(
 
     beta: float | None = None
     benchmark: str | None = None
+    alpha: float | None = None
+    info_ratio: float | None = None
     if cotation_benchmark is not None and cotation_benchmark.clotures:
-        beta = beta_vs_benchmark(rendements, rendements_journaliers(cotation_benchmark.clotures))
+        rendements_b = rendements_journaliers(cotation_benchmark.clotures)
+        beta = beta_vs_benchmark(rendements, rendements_b)
+        alpha = alpha_jensen_annuel_pct(rendements, rendements_b, beta, taux_sans_risque_annuel)
+        info_ratio = information_ratio(rendements, rendements_b)
         benchmark = cotation_benchmark.ticker
+
+    rendement_val = rendement_annuel_pct(rendements)
+    mdd_val = max_drawdown_pct(equity)
 
     return MetriquesPortefeuille(
         sharpe=sharpe_annualise(rendements, taux_sans_risque_annuel),
         sortino=sortino_annualise(rendements, taux_sans_risque_annuel),
-        max_drawdown_pct=max_drawdown_pct(equity),
+        calmar=calmar_ratio(rendement_val, mdd_val),
+        max_drawdown_pct=mdd_val,
         volatilite_annuelle_pct=volatilite_annuelle_pct(rendements),
-        rendement_annuel_pct=rendement_annuel_pct(rendements),
+        rendement_annuel_pct=rendement_val,
+        var_95_pct=value_at_risk_historique_pct(rendements, 0.95),
         hhi=hhi(poids_pct),
         plus_grosse_position_pct=max(poids_pct) if poids_pct else None,
         beta=beta,
+        alpha_annuel_pct=alpha,
+        information_ratio=info_ratio,
         benchmark=benchmark,
     )
