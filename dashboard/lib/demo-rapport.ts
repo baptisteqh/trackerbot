@@ -208,12 +208,16 @@ export const DEMO_RAPPORT: Rapport = {
   metriques: {
     sharpe: 1.42,
     sortino: 2.18,
+    calmar: 2.88,
     max_drawdown_pct: 8.6,
     volatilite_annuelle_pct: 17.4,
     rendement_annuel_pct: 24.8,
+    var_95_pct: 2.1,
     hhi: 2418,
     plus_grosse_position_pct: 32.4,
     beta: 1.08,
+    alpha_annuel_pct: 3.4,
+    information_ratio: 0.72,
     benchmark: "SPY",
   },
   equity_series: {

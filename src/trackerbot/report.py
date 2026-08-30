@@ -209,20 +209,26 @@ def _formater_metriques(m: MetriquesPortefeuille) -> list[str]:
     risque = _joindre(
         _optionnel("Sharpe", m.sharpe, "{:.2f}"),
         _optionnel("Sortino", m.sortino, "{:.2f}"),
+        _optionnel("Calmar", m.calmar, "{:.2f}"),
         _optionnel("Vol", m.volatilite_annuelle_pct, "{:.1f}%"),
         _optionnel("Rdmt", m.rendement_annuel_pct, "{:+.1f}%"),
         _optionnel("MaxDD", m.max_drawdown_pct, "{:.1f}%"),
+        _optionnel("VaR95", m.var_95_pct, "{:.1f}%"),
     )
     concentration = _joindre(
         _optionnel("HHI", m.hhi, "{:.0f}"),
         _optionnel("plus grosse", m.plus_grosse_position_pct, "{:.1f}%"),
     )
-    beta = (
-        f"Beta vs {m.benchmark} : {m.beta:.2f}"
-        if m.beta is not None and m.benchmark is not None
-        else None
+    marche = _joindre(
+        (
+            f"Beta vs {m.benchmark} : {m.beta:.2f}"
+            if m.beta is not None and m.benchmark is not None
+            else None
+        ),
+        _optionnel("Alpha", m.alpha_annuel_pct, "{:+.1f}%"),
+        _optionnel("IR", m.information_ratio, "{:.2f}"),
     )
-    corps = [ligne for ligne in (risque, concentration, beta) if ligne]
+    corps = [ligne for ligne in (risque, concentration, marche) if ligne]
     return ["Metriques :", *(f"  {ligne}" for ligne in corps)] if corps else []
 
 
